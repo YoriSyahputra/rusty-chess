@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Rusty Chess
+Comment=Play Chess against AI Personas (Magnus, Hikaru, and Club Bots)
+Exec=/usr/bin/rusty-chess
+Icon=rusty-chess
+Terminal=false
+Type=Application
+Categories=Game;BoardGame;StrategyGame;
+Keywords=chess;catur;ai;magnus;hikaru;rust;
+StartupWMClass=rusty-chess

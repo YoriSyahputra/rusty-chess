@@ -1,0 +1,11 @@
+Package: rusty-chess
+Version: 0.1.0
+Section: games
+Priority: optional
+Architecture: amd64
+Depends: libc6 (>= 2.31), libgl1, libx11-6, libxi6, libxcursor1, libxrandr2, libwayland-client0
+Maintainer: Yori Syahputra Wisnu <yori@ubuntu.local>
+Description: Native Linux Chess Desktop Game with AI Grandmaster Personas
+ A blazingly fast, lightweight native desktop chess application written in pure
+ Rust and egui. Play against customizable AI personalities including Beginner
+ bots, Hikaru-style tactical speedsters, and Magnus-style endgame masters.
