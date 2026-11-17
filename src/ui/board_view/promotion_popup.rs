@@ -61,9 +61,9 @@ pub fn show_promotion_popup(
 
     painter.rect(
         popup_rect,
-        Rounding::same(8.0),
+        Rounding::same(8.0_f32),
         Color32::from_rgb(30, 34, 44),
-        Stroke::new(2.0, Color32::from_rgb(110, 165, 245)),
+        Stroke::new(2.0_f32, Color32::from_rgb(110, 165, 245)),
     );
 
     let roles = [Role::Queen, Role::Rook, Role::Bishop, Role::Knight];

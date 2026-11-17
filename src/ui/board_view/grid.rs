@@ -117,8 +117,8 @@ pub fn render_board_grid(
             );
             painter.rect_stroke(
                 sq_rect.shrink(1.5),
-                Rounding::same(2.0),
-                Stroke::new(2.5, Color32::from_rgb(255, 70, 70)),
+                Rounding::same(2.0_f32),
+                Stroke::new(2.5_f32, Color32::from_rgb(255, 70, 70)),
             );
         }
     }

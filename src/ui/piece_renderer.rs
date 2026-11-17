@@ -470,11 +470,11 @@ pub fn draw_bot_avatar(
         let glow_mid =
             Color32::from_rgba_unmultiplied(accent_rgb[0], accent_rgb[1], accent_rgb[2], 130);
         painter.circle_filled(center, radius * 1.16, glow_outer);
-        painter.circle_stroke(center, radius * 1.07, Stroke::new(2.5, glow_mid));
+        painter.circle_stroke(center, radius * 1.07, Stroke::new(2.5_f32, glow_mid));
     }
 
     painter.circle_filled(center, radius, dark_bg);
-    painter.circle_stroke(center, radius, Stroke::new(2.2, accent));
+    painter.circle_stroke(center, radius, Stroke::new(2.2_f32, accent));
 
     // Emblem unik per persona
     match bot_id {
@@ -493,17 +493,17 @@ pub fn draw_bot_avatar(
         BotId::Hikaru => {
             // Lightning + Queen/Knight speedster emblem
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Knight, false);
-            painter.circle_stroke(center, radius * 0.84, Stroke::new(1.2, accent));
+            painter.circle_stroke(center, radius * 0.84, Stroke::new(1.2_f32, accent));
         }
         BotId::Magnus => {
             // Golden Crown / King GOAT emblem
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::King, false);
-            painter.circle_stroke(center, radius * 0.84, Stroke::new(1.4, accent));
+            painter.circle_stroke(center, radius * 0.84, Stroke::new(1.4_f32, accent));
         }
         BotId::Silicon => {
             // Cybernetic Rook / Queen core
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Queen, false);
-            painter.circle_stroke(center, radius * 0.86, Stroke::new(1.5, accent));
+            painter.circle_stroke(center, radius * 0.86, Stroke::new(1.5_f32, accent));
         }
     }
 }

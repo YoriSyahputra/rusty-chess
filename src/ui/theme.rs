@@ -120,24 +120,25 @@ pub fn apply_global_style(ctx: &Context) {
     visuals.extreme_bg_color = Color32::from_rgb(16, 18, 23);
 
     visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(28, 31, 38);
-    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(48, 53, 66));
-    visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, Color32::from_rgb(222, 226, 235));
-    visuals.widgets.noninteractive.rounding = Rounding::same(6.0);
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, Color32::from_rgb(48, 53, 66));
+    visuals.widgets.noninteractive.fg_stroke =
+        Stroke::new(1.0_f32, Color32::from_rgb(222, 226, 235));
+    visuals.widgets.noninteractive.rounding = Rounding::same(6.0_f32);
 
     visuals.widgets.inactive.bg_fill = Color32::from_rgb(38, 43, 54);
-    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(58, 65, 82));
-    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, Color32::from_rgb(232, 236, 244));
-    visuals.widgets.inactive.rounding = Rounding::same(6.0);
+    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, Color32::from_rgb(58, 65, 82));
+    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, Color32::from_rgb(232, 236, 244));
+    visuals.widgets.inactive.rounding = Rounding::same(6.0_f32);
 
     visuals.widgets.hovered.bg_fill = Color32::from_rgb(52, 60, 76);
-    visuals.widgets.hovered.bg_stroke = Stroke::new(1.2, Color32::from_rgb(100, 155, 240));
-    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, Color32::WHITE);
-    visuals.widgets.hovered.rounding = Rounding::same(6.0);
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.2_f32, Color32::from_rgb(100, 155, 240));
+    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0_f32, Color32::WHITE);
+    visuals.widgets.hovered.rounding = Rounding::same(6.0_f32);
 
     visuals.widgets.active.bg_fill = Color32::from_rgb(65, 115, 195);
-    visuals.widgets.active.bg_stroke = Stroke::new(1.5, Color32::from_rgb(135, 185, 255));
-    visuals.widgets.active.fg_stroke = Stroke::new(1.0, Color32::WHITE);
-    visuals.widgets.active.rounding = Rounding::same(6.0);
+    visuals.widgets.active.bg_stroke = Stroke::new(1.5_f32, Color32::from_rgb(135, 185, 255));
+    visuals.widgets.active.fg_stroke = Stroke::new(1.0_f32, Color32::WHITE);
+    visuals.widgets.active.rounding = Rounding::same(6.0_f32);
 
     style.visuals = visuals;
     ctx.set_style(style);

@@ -105,14 +105,14 @@ impl EvalBarState {
                 Pos2::new(rect.min.x + 2.0, mid_y),
                 Pos2::new(rect.max.x - 2.0, mid_y),
             ],
-            Stroke::new(1.2, Color32::from_rgba_unmultiplied(120, 130, 145, 160)),
+            Stroke::new(1.2_f32, Color32::from_rgba_unmultiplied(120, 130, 145, 160)),
         );
 
         // Border luar
         painter.rect_stroke(
             rect,
             rounding,
-            Stroke::new(1.0, Color32::from_rgb(65, 70, 82)),
+            Stroke::new(1.0_f32, Color32::from_rgb(65, 70, 82)),
         );
 
         // Label angka evaluasi (+1.4, -0.8, M3)
