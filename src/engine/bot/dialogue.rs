@@ -30,6 +30,7 @@ pub fn select_bot_dialogue(bot_id: BotId, trigger: DialogueTrigger) -> String {
 }
 
 /// Menentukan trigger dialog otomatis setelah sebuah langkah terjadi.
+#[allow(clippy::too_many_arguments)]
 pub fn detect_dialogue_trigger(
     ply: usize,
     prev_bot_eval_cp: i32,
@@ -43,22 +44,18 @@ pub fn detect_dialogue_trigger(
     let eval_delta_for_bot = new_bot_eval_cp - prev_bot_eval_cp;
 
     if !was_bot_move {
-        // Langkah baru saja dimainkan oleh Human
         if gave_check {
             return Some(DialogueTrigger::BotInCheck);
         }
-        // Jika evaluasi dari sudut pandang pemain anjlok > 180 cp (artinya bot naik > 180 cp)
         if eval_delta_for_bot > 180 {
             return Some(DialogueTrigger::PlayerBlunders);
         }
-        // Jika pemain menemukan langkah hebat yang menaikkan evaluasi pemain > 120 cp
         if eval_delta_for_bot < -120 {
             return Some(DialogueTrigger::PlayerGreatMove);
         }
         return None;
     }
 
-    // Langkah baru saja dimainkan oleh Bot
     if gave_check {
         return Some(DialogueTrigger::BotGivesCheck);
     }
@@ -82,46 +79,46 @@ pub fn detect_dialogue_trigger(
 
 pub fn dialogue_bank(bot_id: BotId, trigger: DialogueTrigger) -> &'static [&'static str] {
     match bot_id {
-        BotId::Martin => match trigger {
+        BotId::Martin | BotId::Elani | BotId::Jimmy | BotId::Aron => match trigger {
             DialogueTrigger::MatchStart => &[
                 "Halo! Aku baru belajar cara jalan Kuda kemarin sore. Jangan galak-galak ya!",
-                "Asyik main catur! Eh, Gajah itu jalannya miring atau lurus sih?",
+                "Hi there! Let's have a fun, relaxed game of chess today!",
             ],
             DialogueTrigger::OpeningPhase => &[
                 "Aku majukan pion ini dulu deh, kelihatannya rapi!",
-                "Kudanya lompat! Ngik ngok!",
+                "Knights jump over things! That's my favorite rule.",
             ],
             DialogueTrigger::BotCapturesPiece => &[
                 "Eh, bidakmu boleh kumakan ya? Makasih lho!",
-                "Wah kebetulan banget ada bidak gratis di depan mata!",
+                "Ooh, a free piece right in front of me!",
             ],
             DialogueTrigger::PlayerBlunders => &[
                 "Loh, kamu sengaja ngasih bidak buat menghiburku ya?",
-                "Wah, kayaknya langkahmu tadi agak aneh, tapi aku senang!",
+                "Wait, did you leave that piece undefended for me?",
             ],
             DialogueTrigger::PlayerGreatMove => &[
                 "Waduh, langkah apa itu?! Aku jadi bingung mau jalan ke mana!",
-                "Hebat banget! Kamu pasti sering latihan ya?",
+                "Wow, that move looks super smart!",
             ],
             DialogueTrigger::BotInCheck => &[
                 "Eh! Kok Rajaku diancam?! Tunggu sebentar, jangan dimakan!",
-                "Aduh skak! Rajaku harus ngumpet di mana nih?",
+                "Ack, check! Where should my King hide?",
             ],
             DialogueTrigger::BotGivesCheck => &[
                 "Skak!! Hehehe, keren kan aku bisa bilang skak!",
-                "Awas Rajamu! Aku nggak sengaja nyerang lho!",
+                "Check! Watch out for your King!",
             ],
             DialogueTrigger::EndgameEntered => &[
                 "Loh, papannya kok jadi sepi banget sekarang?",
-                "Tinggal sedikit bidaknya, jadi lebih gampang dihitung pakai jari!",
+                "So few pieces left! Now I can count them on my fingers.",
             ],
             DialogueTrigger::BotWinning => &[
                 "Hah?! Kok bidakku masih banyak banget? Aku beneran unggul nih?",
-                "Ibu pasti bangga kalau tahu aku lagi menang main catur!",
+                "Wait, am I actually winning a real chess game?!",
             ],
             DialogueTrigger::BotLosing => &[
                 "Loh, kok Ratuku tiba-tiba hilang? Kamu pakai sulap ya?",
-                "Aduh, bidakku tinggal dikit banget... tapi tetap seru kok!",
+                "Uh oh, my pieces are disappearing fast, but I'm still having fun!",
             ],
             DialogueTrigger::GameOverWin => &[
                 "Horeee! Aku menang! Ini kemenangan pertamaku minggu ini!",
@@ -134,104 +131,195 @@ pub fn dialogue_bank(bot_id: BotId, trigger: DialogueTrigger) -> &'static [&'sta
             ],
         },
 
-        BotId::Warung => match trigger {
+        BotId::Nelson => match trigger {
             DialogueTrigger::MatchStart => &[
-                "Sini duduk dulu, kopi hitamnya diseruput. Jangan buru-buru majukan Ratu!",
-                "Main santai ala pos ronda ya, yang kalah traktir gorengan hangat!",
+                "Don't blink, or my Queen will already be on h5! Let's see how you defend.",
+                "Pawns are overrated—my Queen is coming straight for your King!",
             ],
             DialogueTrigger::OpeningPhase => &[
-                "Buka jalan tengah dulu, warisan teori catur warung sejak 1998.",
-                "Pelan-pelan, kuda keluar kandang sambil nunggu air mendidih.",
+                "Bring out the Queen! Why wait for the middlegame to attack?",
+                "Target locked on f7/f2. Can you handle the early pressure?",
             ],
             DialogueTrigger::BotCapturesPiece => &[
-                "Nah kan, meleng dikit langsung disikat! Kurang fokus nih.",
-                "Lumayan dapat perwira gratis, rasanya kayak dapat pisang goreng bonus!",
+                "Boom! My Queen devours another piece!",
+                "Too slow! When the Queen raids, nothing is safe.",
             ],
             DialogueTrigger::PlayerBlunders => &[
-                "Waduh Mas/Mbak, itu perwiranya kok ditaruh di mulut singa? Bapak sikat ya!",
-                "Kebanyakan ngelamun nih! Langkah barusan bikin pertahananmu bolong.",
+                "Haha! You fell right into my Queen trap!",
+                "Leaving that square unguarded against me is fatal!",
             ],
             DialogueTrigger::PlayerGreatMove => &[
-                "Eits, boleh juga taktiknya! Bapak sampai hampir keselek kopi.",
-                "Wah, langkah tajam nih! Nggak sia-sia sering nongkrong di pos ronda.",
+                "Wait—you actually parried my Queen attack AND gained tempo?!",
+                "Hey, stop chasing my Queen around the board!",
             ],
             DialogueTrigger::BotInCheck => &[
-                "Sabar-sabar, main skak segala! Raja Bapak masih aman terkendali.",
-                "Walah, kaget Bapak! Untung masih ada jalan minggir.",
+                "Hey! I'm supposed to be the one giving checks here!",
             ],
             DialogueTrigger::BotGivesCheck => &[
-                "Skak dulu biar nggak ngantuk! Ayo pindah ke mana Rajanya?",
-                "Permisi, Skak! Kopinya jangan sampai tumpah ya!",
+                "Check! My Queen sends her regards!",
             ],
             DialogueTrigger::EndgameEntered => &[
-                "Perwira sudah pada pulang kampung, sekarang adu napas pion tua!",
-                "Babak akhir nih, salah langkah dikit pion langsung naik pangkat.",
+                "Wait, how did we reach an endgame? Where did my attack go?",
             ],
             DialogueTrigger::BotWinning => &[
-                "Wah, posisi Bapak sudah angin surga ini. Siap-siap bungkus kemenangan!",
-                "Bidak Bapak sudah mengepung dari segala penjuru, mau lari ke mana lagi?",
+                "Told you! Early Queen attacks work every single time!",
             ],
             DialogueTrigger::BotLosing => &[
-                "Waduh, pertahanan pos ronda jebol! Kacamata Bapak kayaknya kurang pas.",
-                "Berat nih posisinya, tapi Bapak pantang menyerah sebelum skakmat!",
+                "Okay, maybe bringing the Queen out on move 2 was slightly ambitious...",
             ],
             DialogueTrigger::GameOverWin => &[
-                "Skakmat! Mantap jiwa, besok-besok mampir warung lagi kalau mau revans!",
+                "Crushed by the Queen raid! Want a rematch?",
             ],
             DialogueTrigger::GameOverLoss => &[
-                "Ampun suhu! Bapak ngaku kalah, permainanmu rapi betul malam ini.",
+                "Ugh, you refuted my entire attack! Fine, you win this one.",
             ],
             DialogueTrigger::GameOverDraw => &[
-                "Remis! Adil sudah, kopi habis pertandingan pun imbang.",
+                "A draw?! After all those fireworks?",
             ],
         },
 
-        BotId::Club => match trigger {
+        BotId::Mittens => match trigger {
             DialogueTrigger::MatchStart => &[
-                "Halo! Mari bermain sportif. Aku sedang melatih repertoar pembukaan turnamen kampus.",
-                "Siap bertanding! Fokus pada pengembangan perwira dan kontrol petak pusat.",
+                "Meow. I am Mittens. My rating says 1, so this should be easy for you... right? Hehehe.",
+                "Purrrr... look at all those shiny pieces on the board. Let us play.",
+            ],
+            DialogueTrigger::OpeningPhase => &[
+                "A quiet little paw step forward. Nothing to worry about... meow.",
+                "Hehehe... developing my claws into the center.",
+            ],
+            DialogueTrigger::BotCapturesPiece => &[
+                "Nom. That piece belonged to me anyway. Meow.",
+                "Swiped off the table! Just like a glass of milk.",
+            ],
+            DialogueTrigger::PlayerBlunders => &[
+                "Meow...? Did you really think I wouldn't see 14 moves ahead? Hehehe.",
+                "Oh dear. The abyss gazes back at your position.",
+            ],
+            DialogueTrigger::PlayerGreatMove => &[
+                "Purr... interesting. You delayed the inevitable by two whole moves.",
+                "A clever human move! You earn one head pat.",
+            ],
+            DialogueTrigger::BotInCheck => &[
+                "Hiss! Touching the royal cat is strictly forbidden.",
+            ],
+            DialogueTrigger::BotGivesCheck => &[
+                "Meow — Check. Nowhere to run, little mouse.",
+            ],
+            DialogueTrigger::EndgameEntered => &[
+                "The board grows cold and empty. Time for the endgame pounce.",
+            ],
+            DialogueTrigger::BotWinning => &[
+                "Hehehe... everything is proceeding according to the feline prophecy. Meow.",
+            ],
+            DialogueTrigger::BotLosing => &[
+                "Hiss!! Impossible! Did someone unplug my yarn ball?!",
+            ],
+            DialogueTrigger::GameOverWin => &[
+                "Checkmate. Meow! Another grandmaster soul collected.",
+            ],
+            DialogueTrigger::GameOverLoss => &[
+                "Meow?! You defeated Mittens?! I demand tuna and an immediate rematch!",
+            ],
+            DialogueTrigger::GameOverDraw => &[
+                "A draw. I shall nap on the chessboard now. Purrrr.",
+            ],
+        },
+
+        BotId::Warung | BotId::Emir | BotId::Sven | BotId::AdaptiveJimmy => match trigger {
+            DialogueTrigger::MatchStart => &[
+                "Sini duduk dulu, kopi hitamnya diseruput. Jangan buru-buru majukan Ratu!",
+                "Let's have a solid tactical match! Ready when you are.",
+            ],
+            DialogueTrigger::OpeningPhase => &[
+                "Buka jalan tengah dulu, kontrol petak pusat sejak awal.",
+                "Developing pieces smoothly toward the center.",
+            ],
+            DialogueTrigger::BotCapturesPiece => &[
+                "Nah kan, meleng dikit langsung disikat! Kurang fokus nih.",
+                "Clean tactical exchange in my favor!",
+            ],
+            DialogueTrigger::PlayerBlunders => &[
+                "Waduh, itu perwiranya kok ditaruh di mulut singa? Langsung disikat!",
+                "Oops, that move leaves a huge tactical hole in your camp!",
+            ],
+            DialogueTrigger::PlayerGreatMove => &[
+                "Eits, boleh juga taktiknya! Langkah yang sangat tajam!",
+                "Sharp move! I didn't expect that tactical resource.",
+            ],
+            DialogueTrigger::BotInCheck => &[
+                "Sabar-sabar, main skak segala! Raja masih aman terkendali.",
+            ],
+            DialogueTrigger::BotGivesCheck => &[
+                "Skak dulu biar nggak ngantuk! Ayo pindah ke mana Rajanya?",
+            ],
+            DialogueTrigger::EndgameEntered => &[
+                "Perwira sudah pada pulang kampung, sekarang adu teknik pion di babak akhir!",
+            ],
+            DialogueTrigger::BotWinning => &[
+                "Wah, posisi sudah angin surga ini. Siap-siap bungkus kemenangan!",
+            ],
+            DialogueTrigger::BotLosing => &[
+                "Waduh, pertahanan mulai jebol! Tapi pantang menyerah sebelum skakmat!",
+            ],
+            DialogueTrigger::GameOverWin => &[
+                "Skakmat! Mantap jiwa, kapan-kapan kita tanding ulang lagi!",
+            ],
+            DialogueTrigger::GameOverLoss => &[
+                "Permainanmu rapi betul hari ini! Selamat atas kemenangannya.",
+            ],
+            DialogueTrigger::GameOverDraw => &[
+                "Remis! Adil sudah, pertandingan yang seimbang.",
+            ],
+        },
+
+        BotId::Club
+        | BotId::Antonio
+        | BotId::Isabel
+        | BotId::Wally
+        | BotId::Li
+        | BotId::Noam
+        | BotId::Francis
+        | BotId::Danny => match trigger {
+            DialogueTrigger::MatchStart => &[
+                "Halo! Mari bermain sportif. Fokus pada pengembangan perwira dan struktur pion.",
+                "Let's play principled tournament chess. May the sharpest calculation win!",
             ],
             DialogueTrigger::OpeningPhase => &[
                 "Pengembangan perwira minor dan persiapan rokade adalah prioritas utama.",
-                "Struktur pembukaan yang solid akan menentukan rencana di midgame.",
+                "Classical development—controlling key central squares before launching operations.",
             ],
             DialogueTrigger::BotCapturesPiece => &[
                 "Pertukaran yang menguntungkan secara taktis maupun struktural.",
-                "Satu perwira diamankan! Koordinasi bidakku semakin solid.",
+                "Winning material while improving piece coordination!",
             ],
             DialogueTrigger::PlayerBlunders => &[
                 "Ups, sepertinya kamu melewatkan kombinasi taktis di langkah barusan!",
-                "Langkah itu melemahkan koordinasi pertahananmu secara signifikan.",
+                "That inaccuracy compromises your pawn structure and king safety.",
             ],
             DialogueTrigger::PlayerGreatMove => &[
                 "Langkah yang sangat akurat! Kamu menemukan sumber daya pertahanan terbaik.",
-                "Kalkulasi yang impresif! Aku harus ekstra hati-hati sekarang.",
+                "First-class calculation! That was the strongest continuation on the board.",
             ],
             DialogueTrigger::BotInCheck => &[
                 "Skak yang bagus, tapi aku sudah menyiapkan petak aman untuk Raja.",
-                "Tekanan yang menarik! Mari kita lihat apakah seranganmu berlanjut.",
             ],
             DialogueTrigger::BotGivesCheck => &[
                 "Skak! Memaksa Rajamu kehilangan tempo berharga.",
-                "Skak! Inisiatif serangan sekarang beralih ke tanganku.",
             ],
             DialogueTrigger::EndgameEntered => &[
                 "Kita memasuki fase Endgame. Aktivitas Raja dan pion bebas akan menjadi penentu.",
-                "Saatnya menerapkan teori endgame buku panduan klub!",
             ],
             DialogueTrigger::BotWinning => &[
                 "Keunggulan material dan posisi ini sudah cukup jelas untuk dikonversi.",
-                "Semua perwiraku berada di petak optimal. Tinggal menjaga ketelitian.",
             ],
             DialogueTrigger::BotLosing => &[
                 "Posisiku tertekan hebat, tapi aku akan tetap mencari peluang counterplay.",
-                "Kamu bermain sangat rapi! Aku harus bertahan sekuat tenaga.",
             ],
             DialogueTrigger::GameOverWin => &[
                 "Terima kasih atas pertandingannya! Evaluasi pasca-game pasti akan menarik.",
             ],
             DialogueTrigger::GameOverLoss => &[
-                "Permainan yang luar biasa darimu! Aku banyak belajar dari partai ini.",
+                "Permainan yang luar biasa darimu! Kamu layak mendapatkan mahkota ini.",
             ],
             DialogueTrigger::GameOverDraw => &[
                 "Hasil seri yang adil setelah pertarungan posisional yang ketat!",
@@ -342,26 +430,22 @@ pub fn dialogue_bank(bot_id: BotId, trigger: DialogueTrigger) -> &'static [&'sta
             ],
         },
 
-        BotId::Silicon => match trigger {
+        BotId::Silicon | BotId::EngineCustom => match trigger {
             DialogueTrigger::MatchStart => &[
-                "[RUSTFISH CORE ONLINE] Alpha-Beta + Quiescence search initialized. Depth target: 7.",
-                "[SYSTEM] Zobrist 16MB Transposition Table cleared. Ready for optimal play.",
+                "[RUSTFISH CORE ONLINE] Alpha-Beta + Quiescence search initialized.",
+                "[SYSTEM] Zobrist 8MB Transposition Table ready. Searching optimal continuation.",
             ],
             DialogueTrigger::OpeningPhase => &[
                 "[EVAL] Center control vector optimal. Piece mobility delta increasing.",
-                "[SEARCH] Principal Variation locked. Expanding main tactical branches.",
             ],
             DialogueTrigger::BotCapturesPiece => &[
                 "[MATERIAL +] Subtree pruned via MVV-LVA capture sequence.",
-                "[EVAL] Material imbalance updated in favor of engine.",
             ],
             DialogueTrigger::PlayerBlunders => &[
                 "[WARNING] Human move caused >180 cp evaluation drop. Punishing immediately.",
-                "[TACTIC DETECTED] Horizon cutoff confirmed. Decisive advantage acquired.",
             ],
             DialogueTrigger::PlayerGreatMove => &[
                 "[ANALYSIS] Human matched Principal Variation top candidate move.",
-                "[INFO] High-accuracy move detected. Re-evaluating alpha-beta window.",
             ],
             DialogueTrigger::BotInCheck => &[
                 "[CHECK EVASION] Legal King responses enumerated. Zero threat to evaluation.",
@@ -382,7 +466,7 @@ pub fn dialogue_bank(bot_id: BotId, trigger: DialogueTrigger) -> &'static [&'sta
                 "[TERMINATED] Checkmate sequence executed. Engine victorious.",
             ],
             DialogueTrigger::GameOverLoss => &[
-                "[TERMINATED] Anomaly detected: Human defeated Silicon Core. Respect logged.",
+                "[TERMINATED] Human defeated Engine Core. Respect logged.",
             ],
             DialogueTrigger::GameOverDraw => &[
                 "[TERMINATED] Equilibrium reached. Match concluded in a draw.",

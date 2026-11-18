@@ -478,30 +478,31 @@ pub fn draw_bot_avatar(
 
     // Emblem unik per persona
     match bot_id {
-        BotId::Martin => {
-            // FriendlyPawn + smile badge
+        BotId::Martin | BotId::Elani | BotId::Jimmy | BotId::Aron => {
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Pawn, false);
         }
-        BotId::Warung => {
-            // Knight + warm coffee aura
+        BotId::Warung | BotId::Emir | BotId::Sven | BotId::AdaptiveJimmy => {
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Knight, false);
         }
-        BotId::Club => {
-            // Bishop emblem
+        BotId::Nelson => {
+            draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Queen, false);
+        }
+        BotId::Club | BotId::Antonio | BotId::Isabel | BotId::Wally => {
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Bishop, false);
         }
+        BotId::Li | BotId::Noam | BotId::Francis | BotId::Danny => {
+            draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Rook, false);
+            painter.circle_stroke(center, radius * 0.84, Stroke::new(1.2_f32, accent));
+        }
         BotId::Hikaru => {
-            // Lightning + Queen/Knight speedster emblem
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Knight, false);
             painter.circle_stroke(center, radius * 0.84, Stroke::new(1.2_f32, accent));
         }
         BotId::Magnus => {
-            // Golden Crown / King GOAT emblem
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::King, false);
             painter.circle_stroke(center, radius * 0.84, Stroke::new(1.4_f32, accent));
         }
-        BotId::Silicon => {
-            // Cybernetic Rook / Queen core
+        BotId::Mittens | BotId::Silicon | BotId::EngineCustom => {
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Queen, false);
             painter.circle_stroke(center, radius * 0.86, Stroke::new(1.5_f32, accent));
         }

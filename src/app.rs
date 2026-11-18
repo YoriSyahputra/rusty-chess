@@ -1,8 +1,12 @@
 use crate::{
     audio::{AudioEngine, SoundEffect},
-    config::{AssistanceMode, UserConfig},
+    config::{
+        AnimationProfile, AssistanceMode, MoveInputMethod, NotationStyle, PlayColorChoice,
+        UserConfig,
+    },
     domain::{
-        format_fen, ChessMatchState, Color, GameOutcome, Move, Role, TacticalArrow, TimeControl,
+        format_fen, ChessMatchState, Color, GameOutcome, Move, PlayerController, Role,
+        TacticalArrow, TimeControl,
     },
     engine::{
         bot::{
@@ -15,18 +19,24 @@ use crate::{
     ui::{
         board_view::BoardInteractionState,
         eval_bar::EvalBarState,
+        pages::{render_bots_lobby, render_home_page, render_play_hub, BotsLobbyState},
         side_panel::{render_player_strip, render_side_panel, show_bot_selector_modal},
-        theme::apply_global_style_with_mode,
+        sidebar::{render_left_sidebar, ActiveRoute},
+        theme::{apply_global_style_with_mode, BoardTheme, UiTokens},
         top_bar::render_top_bar,
     },
 };
 use egui::{Color32, Context, Key, RichText, Vec2, Window};
+use rand::Rng;
 use shakmaty::Position;
 use std::time::{Duration, Instant};
 
 pub struct RustyChessApp {
+    pub active_route: ActiveRoute,
+    pub has_active_match: bool,
     pub profile: UserProfile,
     pub config: UserConfig,
+    pub lobby_state: BotsLobbyState,
     pub match_state: ChessMatchState,
     pub bot_persona: BotPersona,
     pub bot_dialogue: String,
@@ -56,6 +66,7 @@ pub struct RustyChessApp {
     // Modals state
     pub show_bot_selector: bool,
     pub show_fen_pgn_modal: bool,
+    pub show_settings_modal: bool,
     pub custom_fen_input: String,
     pub fen_error_msg: Option<String>,
     pub modal_bot_id: BotId,
@@ -81,12 +92,18 @@ impl RustyChessApp {
         let engine_worker = EngineWorker::spawn();
         let audio = AudioEngine::new(config.sound_enabled);
 
+        let mut lobby_state = BotsLobbyState::default();
+        lobby_state.custom_engine_elo = profile.custom_engine_elo.clamp(250, 3200);
+
         Self {
+            active_route: ActiveRoute::Home,
+            has_active_match: false,
             modal_bot_id: bot_persona.id,
             modal_human_color: Color::White,
             modal_time_control: config.time_control,
             profile,
             config,
+            lobby_state,
             match_state,
             bot_persona,
             bot_dialogue,
@@ -110,6 +127,7 @@ impl RustyChessApp {
             entered_endgame_announced: false,
             show_bot_selector: false,
             show_fen_pgn_modal: false,
+            show_settings_modal: false,
             custom_fen_input: String::new(),
             fen_error_msg: None,
             fps_smoothed: 60.0,
@@ -120,7 +138,11 @@ impl RustyChessApp {
 
     pub fn start_new_match(&mut self, bot_id: BotId, human_color: Color, tc: TimeControl) {
         self.abort_engine();
-        self.bot_persona = BotPersona::by_id(bot_id);
+        self.bot_persona = match bot_id {
+            BotId::AdaptiveJimmy => BotPersona::adaptive_jimmy(self.profile.adaptive_jimmy_elo),
+            BotId::EngineCustom => BotPersona::engine_custom(self.lobby_state.custom_engine_elo),
+            other => BotPersona::by_id(other),
+        };
         self.config.time_control = tc;
         self.config.board_flipped = human_color == Color::Black;
         self.profile.config = self.config.clone();
@@ -136,6 +158,8 @@ impl RustyChessApp {
         self.hints_used = 0;
         self.takebacks_used = 0;
         self.match_result_recorded = false;
+        self.has_active_match = true;
+        self.active_route = ActiveRoute::Match;
         self.bot_dialogue = select_bot_dialogue(self.bot_persona.id, DialogueTrigger::MatchStart);
         self.human_turn_started_at = Instant::now();
         self.audio.play(SoundEffect::GameStart);
@@ -143,6 +167,27 @@ impl RustyChessApp {
         if self.match_state.is_bot_turn() {
             self.dispatch_bot_search();
         }
+    }
+
+    pub fn start_pass_and_play_match(&mut self) {
+        self.abort_engine();
+        let mut state = ChessMatchState::new_standard(Color::White);
+        state.white_controller = PlayerController::Human;
+        state.black_controller = PlayerController::Human;
+        state.set_time_control(self.config.time_control);
+        self.match_state = state;
+        self.board_ui.reset();
+        self.eval_bar = EvalBarState::default();
+        self.last_eval_cp_white = 0;
+        self.entered_endgame_announced = false;
+        self.hints_used = 0;
+        self.takebacks_used = 0;
+        self.match_result_recorded = false;
+        self.has_active_match = true;
+        self.active_route = ActiveRoute::Match;
+        self.bot_dialogue = "Pass & Play (2-Player Local Mode) active.".to_string();
+        self.human_turn_started_at = Instant::now();
+        self.audio.play(SoundEffect::GameStart);
     }
 
     pub fn start_from_custom_fen(&mut self, fen_str: &str) -> Result<(), String> {
@@ -159,6 +204,8 @@ impl RustyChessApp {
         self.hints_used = 0;
         self.takebacks_used = 0;
         self.match_result_recorded = false;
+        self.has_active_match = true;
+        self.active_route = ActiveRoute::Match;
         self.bot_dialogue = select_bot_dialogue(self.bot_persona.id, DialogueTrigger::MatchStart);
         self.human_turn_started_at = Instant::now();
         self.audio.play(SoundEffect::GameStart);
@@ -343,6 +390,21 @@ impl RustyChessApp {
         } else {
             0
         };
+
+        if self.bot_persona.id == BotId::AdaptiveJimmy {
+            match won {
+                Some(true) => {
+                    self.profile.adaptive_jimmy_elo =
+                        (self.profile.adaptive_jimmy_elo + 100).min(2200);
+                }
+                Some(false) => {
+                    self.profile.adaptive_jimmy_elo =
+                        self.profile.adaptive_jimmy_elo.saturating_sub(75).max(400);
+                }
+                None => {}
+            }
+        }
+
         let summary = SavedMatchSummary {
             opponent_name: self.bot_persona.name.to_string(),
             opponent_elo: self.bot_persona.elo,
@@ -457,7 +519,7 @@ impl RustyChessApp {
     }
 
     fn handle_keyboard_shortcuts(&mut self, ctx: &Context) {
-        if self.show_fen_pgn_modal || self.show_bot_selector {
+        if self.show_fen_pgn_modal || self.show_bot_selector || self.show_settings_modal {
             return;
         }
         ctx.input(|i| {
@@ -477,6 +539,127 @@ impl RustyChessApp {
                 self.config.board_flipped = !self.config.board_flipped;
             }
         });
+    }
+
+    fn show_settings_modal_window(&mut self, ctx: &Context) {
+        if !self.show_settings_modal {
+            return;
+        }
+        let mut open = self.show_settings_modal;
+        let mut style_changed = false;
+        let mut reset_requested = false;
+
+        Window::new("⚙ Rusty Chess Settings")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
+            .fixed_size(Vec2::new(460.0, 390.0))
+            .show(ctx, |ui| {
+                ui.label(RichText::new("Board & Visual Appearance").strong().size(14.5));
+                ui.add_space(4.0);
+
+                ui.horizontal(|ui| {
+                    ui.label("UI Theme:");
+                    if ui
+                        .selectable_value(&mut self.config.dark_mode, true, "🌙 Dark UI")
+                        .clicked()
+                    {
+                        style_changed = true;
+                    }
+                    if ui
+                        .selectable_value(&mut self.config.dark_mode, false, "☀ Light UI")
+                        .clicked()
+                    {
+                        style_changed = true;
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label("Board Theme:");
+                    egui::ComboBox::from_id_salt("settings_board_theme")
+                        .selected_text(self.config.board_theme.name())
+                        .show_ui(ui, |ui| {
+                            for &t in BoardTheme::all() {
+                                ui.selectable_value(&mut self.config.board_theme, t, t.name());
+                            }
+                        });
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label("Animation Speed:");
+                    egui::ComboBox::from_id_salt("settings_anim_speed")
+                        .selected_text(self.config.animation_profile.label())
+                        .show_ui(ui, |ui| {
+                            for &p in AnimationProfile::all() {
+                                ui.selectable_value(
+                                    &mut self.config.animation_profile,
+                                    p,
+                                    p.label(),
+                                );
+                            }
+                        });
+                });
+
+                ui.add_space(6.0);
+                ui.separator();
+                ui.label(RichText::new("Gameplay & Notation").strong().size(14.5));
+                ui.add_space(4.0);
+
+                ui.horizontal(|ui| {
+                    ui.label("Move Method:");
+                    for &m in MoveInputMethod::all() {
+                        ui.selectable_value(&mut self.config.move_input_method, m, m.label());
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label("Move Notation:");
+                    ui.selectable_value(
+                        &mut self.config.notation_style,
+                        NotationStyle::Figurine,
+                        "♘ Figurine (♘f3)",
+                    );
+                    ui.selectable_value(
+                        &mut self.config.notation_style,
+                        NotationStyle::Text,
+                        "Text (Nf3)",
+                    );
+                });
+
+                ui.checkbox(
+                    &mut self.config.enable_premoves,
+                    "Enable Premoves during Bot Turn",
+                );
+                ui.checkbox(
+                    &mut self.config.show_coordinates,
+                    "Show Board Coordinates (A–H / 1–8)",
+                );
+                ui.checkbox(&mut self.config.sound_enabled, "Enable Sound Effects");
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.horizontal(|ui| {
+                    if ui
+                        .button(
+                            RichText::new("🗑 Reset Crown & Match Progress")
+                                .color(Color32::from_rgb(235, 85, 85)),
+                        )
+                        .clicked()
+                    {
+                        reset_requested = true;
+                    }
+                });
+            });
+
+        self.show_settings_modal = open;
+        if style_changed {
+            apply_global_style_with_mode(ctx, self.config.dark_mode);
+        }
+        if reset_requested {
+            self.profile.reset_progress();
+        }
+        self.profile.config = self.config.clone();
     }
 
     fn show_fen_pgn_export_modal(&mut self, ctx: &Context) {
@@ -590,8 +773,9 @@ impl eframe::App for RustyChessApp {
             self.last_rss_poll = Instant::now();
         }
 
-        // Tick chess clock when active
-        let clock_actively_ticking = !self.match_state.clock.is_unlimited
+        // Tick chess clock only during an active live match
+        let clock_actively_ticking = self.active_route == ActiveRoute::Match
+            && !self.match_state.clock.is_unlimited
             && self.match_state.outcome == GameOutcome::Ongoing
             && !self.match_state.history.is_empty();
 
@@ -614,179 +798,307 @@ impl eframe::App for RustyChessApp {
         // Poll background AI engine worker events
         self.poll_engine_events();
 
-        // Trigger bot move if it is the bot's turn
-        if self.match_state.is_bot_turn() && !self.is_engine_thinking {
+        if self.active_route == ActiveRoute::Match
+            && self.match_state.is_bot_turn()
+            && !self.is_engine_thinking
+        {
             self.dispatch_bot_search();
         }
 
         self.handle_keyboard_shortcuts(ctx);
 
-        // 1. Top Bar Panel
-        egui::TopBottomPanel::top("top_bar")
-            .exact_height(40.0)
-            .show(ctx, |ui| {
-                let top_actions = render_top_bar(
-                    ui,
-                    &mut self.config,
-                    self.is_engine_thinking,
-                    self.thinking_depth,
-                    self.thinking_max_depth,
-                    self.last_nps_kns,
-                    self.fps_smoothed,
-                    self.rss_mb,
-                );
+        // 0. Persistent Left Navigation Sidebar (`Home`, `Play`, `Bots`, `Puzzles`, `Review`, `Settings`)
+        let win_w = ctx.screen_rect().width();
+        let compact_sidebar = self
+            .config
+            .sidebar_collapsed
+            .unwrap_or(win_w < 1100.0);
+        let sidebar_w = if compact_sidebar { 60.0 } else { 168.0 };
+        let tokens = UiTokens::for_mode(self.config.dark_mode);
 
-                if top_actions.open_new_game_modal {
-                    self.modal_bot_id = self.bot_persona.id;
-                    self.modal_human_color = self.match_state.human_color;
-                    self.modal_time_control = self.config.time_control;
-                    self.show_bot_selector = true;
-                }
-                if top_actions.open_fen_pgn_modal {
-                    self.custom_fen_input = format_fen(&self.match_state.displayed_position());
-                    self.fen_error_msg = None;
-                    self.show_fen_pgn_modal = true;
-                }
-            });
-
-        // 2. Bounded Right Control Panel (360 px Fixed Width)
-        let hints_rem = self.hints_remaining();
-        let takebacks_rem = self.takebacks_remaining();
-        let earned_crowns = self.profile.crowns_for(self.bot_persona.code);
-        let show_feedback = self.effective_show_move_feedback();
-
-        egui::SidePanel::right("control_panel")
-            .exact_width(360.0)
+        egui::SidePanel::left("left_navigation_sidebar")
+            .exact_width(sidebar_w)
             .resizable(false)
+            .frame(
+                egui::Frame::none()
+                    .fill(tokens.bg_sidebar)
+                    .stroke(egui::Stroke::new(1.0_f32, tokens.border_subtle)),
+            )
             .show(ctx, |ui| {
-                let side_actions = render_side_panel(
+                let nav = render_left_sidebar(
                     ui,
-                    &mut self.match_state,
-                    &self.bot_persona,
-                    &self.bot_dialogue,
-                    self.is_engine_thinking,
-                    self.config.assistance_mode,
-                    hints_rem,
-                    takebacks_rem,
-                    earned_crowns,
-                    self.config.notation_style,
-                    show_feedback,
+                    self.active_route,
+                    &mut self.config,
+                    self.has_active_match,
+                    compact_sidebar,
                 );
+                if let Some(next_route) = nav.navigate_to {
+                    self.active_route = next_route;
+                }
+                if nav.toggled_theme_mode {
+                    apply_global_style_with_mode(ctx, self.config.dark_mode);
+                    self.profile.config = self.config.clone();
+                    self.profile.save();
+                }
+                if nav.open_settings_modal {
+                    self.show_settings_modal = true;
+                }
+            });
 
-                if side_actions.open_bot_selector {
-                    self.modal_bot_id = self.bot_persona.id;
-                    self.modal_human_color = self.match_state.human_color;
-                    self.modal_time_control = self.config.time_control;
-                    self.show_bot_selector = true;
-                }
-                if side_actions.flip_board {
-                    self.config.board_flipped = !self.config.board_flipped;
-                }
-                if side_actions.undo_takeback {
-                    if self.takebacks_remaining().unwrap_or(99) > 0 {
-                        self.takebacks_used = self.takebacks_used.saturating_add(1);
-                        self.abort_engine();
-                        self.match_state.undo_move_pair();
-                        self.board_ui.reset();
-                        let eval_cp = evaluate_for_white(
-                            &self.match_state.current_pos,
-                            &self.bot_persona.weights,
-                        );
-                        self.eval_bar.set_eval_cp(eval_cp);
-                        self.last_eval_cp_white = eval_cp;
+        // Route Dispatcher
+        match self.active_route {
+            ActiveRoute::Home => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let home_actions = render_home_page(
+                        ui,
+                        &self.profile,
+                        self.config.board_theme,
+                        self.config.dark_mode,
+                    );
+                    if let Some(r) = home_actions.navigate_to {
+                        self.active_route = r;
                     }
-                }
-                if side_actions.request_hint {
-                    self.dispatch_hint_search();
-                }
-                if side_actions.resign_game {
-                    self.abort_engine();
-                    let human_color = self.match_state.human_color;
-                    self.match_state.resign(human_color);
-                    self.record_match_completion_if_needed();
-                    self.bot_dialogue =
-                        select_bot_dialogue(self.bot_persona.id, DialogueTrigger::GameOverWin);
-                    self.audio.play(SoundEffect::GameOver);
-                }
-            });
+                    if let Some(bot_id) = home_actions.quick_start_bot {
+                        self.lobby_state.selected_bot = bot_id;
+                        self.start_new_match(bot_id, Color::White, self.config.time_control);
+                    }
+                    if home_actions.start_coach_match {
+                        self.config.assistance_mode = AssistanceMode::Friendly;
+                        self.start_new_match(
+                            BotId::AdaptiveJimmy,
+                            Color::White,
+                            self.config.time_control,
+                        );
+                    }
+                });
+            }
 
-        // 3. Central Workspace (Exact Geometry from NEW_DESIGN.md Section 5.1)
-        let show_eval_bar = self.effective_show_eval_bar();
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let avail = ui.available_size();
-            let eval_w = if show_eval_bar { 28.0 + 8.0 } else { 0.0 };
-            // Reserve 44.0 px top strip + 44.0 px bottom strip + gutters = 104.0 px
-            let board_size = (avail.x - eval_w - 16.0)
-                .min(avail.y - 104.0)
-                .max(320.0);
+            ActiveRoute::PlayHub => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let hub_actions = render_play_hub(
+                        ui,
+                        &self.match_state,
+                        &self.bot_persona,
+                        self.config.board_theme,
+                        self.config.dark_mode,
+                    );
+                    if let Some(r) = hub_actions.navigate_to {
+                        self.active_route = r;
+                    }
+                    if hub_actions.start_coach_mode {
+                        self.config.assistance_mode = AssistanceMode::Assisted;
+                        self.start_new_match(
+                            BotId::AdaptiveJimmy,
+                            Color::White,
+                            self.config.time_control,
+                        );
+                    }
+                    if hub_actions.start_pass_and_play {
+                        self.start_pass_and_play_match();
+                    }
+                    if hub_actions.open_custom_fen_modal {
+                        self.custom_fen_input =
+                            format_fen(&self.match_state.displayed_position());
+                        self.fen_error_msg = None;
+                        self.show_fen_pgn_modal = true;
+                    }
+                });
+            }
 
-            let total_group_w = board_size + eval_w;
-            let pad_x = ((avail.x - total_group_w) * 0.5).max(8.0);
-            let pad_y = ((avail.y - (board_size + 96.0)) * 0.5).max(4.0);
+            ActiveRoute::PlayBots => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let lobby_actions = render_bots_lobby(
+                        ui,
+                        &mut self.lobby_state,
+                        &mut self.profile,
+                        &mut self.config,
+                        &self.match_state,
+                    );
+                    if lobby_actions.start_match_requested {
+                        let human_color = match self.lobby_state.play_color_choice {
+                            PlayColorChoice::White => Color::White,
+                            PlayColorChoice::Black => Color::Black,
+                            PlayColorChoice::Random => {
+                                if rand::thread_rng().gen_bool(0.5) {
+                                    Color::White
+                                } else {
+                                    Color::Black
+                                }
+                            }
+                        };
+                        self.start_new_match(
+                            self.lobby_state.selected_bot,
+                            human_color,
+                            self.config.time_control,
+                        );
+                    }
+                });
+            }
 
-            let top_is_bot = (self.match_state.human_color == Color::White
-                && !self.config.board_flipped)
-                || (self.match_state.human_color == Color::Black && self.config.board_flipped);
+            ActiveRoute::Match | ActiveRoute::Puzzles | ActiveRoute::Review => {
+                // Top Bar Panel inside Match / Training views
+                egui::TopBottomPanel::top("top_bar")
+                    .exact_height(40.0)
+                    .show(ctx, |ui| {
+                        let top_actions = render_top_bar(
+                            ui,
+                            &mut self.config,
+                            self.is_engine_thinking,
+                            self.thinking_depth,
+                            self.thinking_max_depth,
+                            self.last_nps_kns,
+                            self.fps_smoothed,
+                            self.rss_mb,
+                        );
 
-            ui.add_space(pad_y);
+                        if top_actions.open_new_game_modal {
+                            self.active_route = ActiveRoute::PlayBots;
+                        }
+                        if top_actions.open_fen_pgn_modal {
+                            self.custom_fen_input =
+                                format_fen(&self.match_state.displayed_position());
+                            self.fen_error_msg = None;
+                            self.show_fen_pgn_modal = true;
+                        }
+                    });
 
-            // Top Player Strip (Opponent by default)
-            ui.horizontal(|ui| {
-                ui.add_space(pad_x + eval_w);
-                render_player_strip(
-                    ui,
-                    board_size,
-                    &self.match_state,
-                    &self.bot_persona,
-                    top_is_bot,
-                    self.is_engine_thinking && top_is_bot,
-                    self.config.dark_mode,
-                );
-            });
+                let hints_rem = self.hints_remaining();
+                let takebacks_rem = self.takebacks_remaining();
+                let earned_crowns = self.profile.crowns_for(self.bot_persona.code);
+                let show_feedback = self.effective_show_move_feedback();
 
-            ui.add_space(4.0);
+                egui::SidePanel::right("control_panel")
+                    .exact_width(360.0)
+                    .resizable(false)
+                    .show(ctx, |ui| {
+                        let side_actions = render_side_panel(
+                            ui,
+                            &mut self.match_state,
+                            &self.bot_persona,
+                            &self.bot_dialogue,
+                            self.is_engine_thinking,
+                            self.config.assistance_mode,
+                            hints_rem,
+                            takebacks_rem,
+                            earned_crowns,
+                            self.config.notation_style,
+                            show_feedback,
+                        );
 
-            // Middle: Eval Bar + 8x8 Interactive Board
-            ui.horizontal(|ui| {
-                ui.add_space(pad_x);
+                        if side_actions.open_bot_selector {
+                            self.active_route = ActiveRoute::PlayBots;
+                        }
+                        if side_actions.open_review {
+                            self.active_route = ActiveRoute::Review;
+                        }
+                        if side_actions.flip_board {
+                            self.config.board_flipped = !self.config.board_flipped;
+                        }
+                        if side_actions.undo_takeback {
+                            if self.takebacks_remaining().unwrap_or(99) > 0 {
+                                self.takebacks_used = self.takebacks_used.saturating_add(1);
+                                self.abort_engine();
+                                self.match_state.undo_move_pair();
+                                self.board_ui.reset();
+                                let eval_cp = evaluate_for_white(
+                                    &self.match_state.current_pos,
+                                    &self.bot_persona.weights,
+                                );
+                                self.eval_bar.set_eval_cp(eval_cp);
+                                self.last_eval_cp_white = eval_cp;
+                            }
+                        }
+                        if side_actions.request_hint {
+                            self.dispatch_hint_search();
+                        }
+                        if side_actions.resign_game {
+                            self.abort_engine();
+                            let human_color = self.match_state.human_color;
+                            self.match_state.resign(human_color);
+                            self.record_match_completion_if_needed();
+                            self.bot_dialogue = select_bot_dialogue(
+                                self.bot_persona.id,
+                                DialogueTrigger::GameOverWin,
+                            );
+                            self.audio.play(SoundEffect::GameOver);
+                        }
+                    });
 
-                if show_eval_bar {
-                    self.eval_bar
-                        .ui(ui, board_size, self.config.board_flipped);
-                    ui.add_space(8.0);
-                }
+                let show_eval_bar = self.effective_show_eval_bar();
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let avail = ui.available_size();
+                    let eval_w = if show_eval_bar { 28.0 + 8.0 } else { 0.0 };
+                    let board_size = (avail.x - eval_w - 16.0)
+                        .min(avail.y - 104.0)
+                        .max(320.0);
 
-                if let Some(human_mv) = self.board_ui.ui(
-                    ui,
-                    board_size,
-                    &mut self.match_state,
-                    self.config.board_theme,
-                    self.config.board_flipped,
-                    self.config.show_coordinates,
-                ) {
-                    let spent_ms = self.human_turn_started_at.elapsed().as_millis() as u64;
-                    self.execute_move_and_update(human_mv, None, spent_ms, false);
-                }
-            });
+                    let total_group_w = board_size + eval_w;
+                    let pad_x = ((avail.x - total_group_w) * 0.5).max(8.0);
+                    let pad_y = ((avail.y - (board_size + 96.0)) * 0.5).max(4.0);
 
-            ui.add_space(4.0);
+                    let top_is_bot = (self.match_state.human_color == Color::White
+                        && !self.config.board_flipped)
+                        || (self.match_state.human_color == Color::Black
+                            && self.config.board_flipped);
 
-            // Bottom Player Strip (User by default)
-            ui.horizontal(|ui| {
-                ui.add_space(pad_x + eval_w);
-                render_player_strip(
-                    ui,
-                    board_size,
-                    &self.match_state,
-                    &self.bot_persona,
-                    !top_is_bot,
-                    self.is_engine_thinking && !top_is_bot,
-                    self.config.dark_mode,
-                );
-            });
-        });
+                    ui.add_space(pad_y);
 
-        // 4. Modals
+                    ui.horizontal(|ui| {
+                        ui.add_space(pad_x + eval_w);
+                        render_player_strip(
+                            ui,
+                            board_size,
+                            &self.match_state,
+                            &self.bot_persona,
+                            top_is_bot,
+                            self.is_engine_thinking && top_is_bot,
+                            self.config.dark_mode,
+                        );
+                    });
+
+                    ui.add_space(4.0);
+
+                    ui.horizontal(|ui| {
+                        ui.add_space(pad_x);
+
+                        if show_eval_bar {
+                            self.eval_bar
+                                .ui(ui, board_size, self.config.board_flipped);
+                            ui.add_space(8.0);
+                        }
+
+                        if let Some(human_mv) = self.board_ui.ui(
+                            ui,
+                            board_size,
+                            &mut self.match_state,
+                            self.config.board_theme,
+                            self.config.board_flipped,
+                            self.config.show_coordinates,
+                        ) {
+                            let spent_ms = self.human_turn_started_at.elapsed().as_millis() as u64;
+                            self.execute_move_and_update(human_mv, None, spent_ms, false);
+                        }
+                    });
+
+                    ui.add_space(4.0);
+
+                    ui.horizontal(|ui| {
+                        ui.add_space(pad_x + eval_w);
+                        render_player_strip(
+                            ui,
+                            board_size,
+                            &self.match_state,
+                            &self.bot_persona,
+                            !top_is_bot,
+                            self.is_engine_thinking && !top_is_bot,
+                            self.config.dark_mode,
+                        );
+                    });
+                });
+            }
+        }
+
+        // Modals
         if let Some(selection) = show_bot_selector_modal(
             ctx,
             &mut self.show_bot_selector,
@@ -802,8 +1114,9 @@ impl eframe::App for RustyChessApp {
         }
 
         self.show_fen_pgn_export_modal(ctx);
+        self.show_settings_modal_window(ctx);
 
-        // 5. Strict Reactive Repaint Mode (NEW_DESIGN.md Section 6.4)
+        // Strict Reactive Repaint Mode (NEW_DESIGN.md Section 6.4)
         if self.eval_bar.is_lerping() || self.board_ui.dragging_from.is_some() {
             ctx.request_repaint();
         } else if self.is_engine_thinking || clock_actively_ticking {

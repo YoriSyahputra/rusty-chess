@@ -1,0 +1,206 @@
+use crate::{
+    domain::ChessMatchState,
+    engine::bot::BotPersona,
+    ui::{
+        board_view::render_board_grid,
+        side_panel::render_player_strip,
+        sidebar::ActiveRoute,
+        theme::{BoardTheme, UiTokens},
+    },
+};
+use egui::{Color32, RichText, Rounding, Sense, Stroke, Ui, Vec2};
+
+#[derive(Debug, Default)]
+pub struct PlayHubActions {
+    pub navigate_to: Option<ActiveRoute>,
+    pub start_coach_mode: bool,
+    pub start_pass_and_play: bool,
+    pub open_custom_fen_modal: bool,
+}
+
+/// Merender Play Hub (`Route::PlayHub`) dengan papan pratinjau di kiri dan kartu pemilih mode di kanan.
+pub fn render_play_hub(
+    ui: &mut Ui,
+    match_state: &ChessMatchState,
+    persona: &BotPersona,
+    board_theme: BoardTheme,
+    dark_mode: bool,
+) -> PlayHubActions {
+    let mut actions = PlayHubActions::default();
+    let tokens = UiTokens::for_mode(dark_mode);
+
+    egui::SidePanel::right("play_hub_right_panel")
+        .exact_width(380.0)
+        .resizable(false)
+        .show_inside(ui, |ui| {
+            ui.add_space(12.0);
+            ui.label(
+                RichText::new("♟ Choose Game Mode")
+                    .strong()
+                    .size(20.0)
+                    .color(tokens.text_primary),
+            );
+            ui.label(
+                RichText::new("Select how you want to play on your desktop today:")
+                    .size(12.5)
+                    .color(tokens.text_secondary),
+            );
+            ui.add_space(14.0);
+
+            if render_mode_selector_card(
+                ui,
+                "🤖  Play Computer Bots",
+                "Challenge 18 distinct AI personalities from Beginner to Grandmaster, earn up to 54 Crowns, or dial in a custom ELO engine.",
+                "Select Bot Opponent",
+                tokens.accent_primary,
+                &tokens,
+            ) {
+                actions.navigate_to = Some(ActiveRoute::PlayBots);
+            }
+
+            ui.add_space(10.0);
+
+            if render_mode_selector_card(
+                ui,
+                "🎓  Play with Coach (Assisted)",
+                "Practice in Friendly/Assisted mode with real-time move evaluations, threat arrows, best-move hints, and takebacks.",
+                "Start Guided Match",
+                tokens.accent_info,
+                &tokens,
+            ) {
+                actions.start_coach_mode = true;
+            }
+
+            ui.add_space(10.0);
+
+            if render_mode_selector_card(
+                ui,
+                "👥  Pass & Play (Local 2-Player)",
+                "Play over-the-board with a friend on the same screen with full chess clock support and post-game review.",
+                "Start 2-Player Board",
+                tokens.accent_gold,
+                &tokens,
+            ) {
+                actions.start_pass_and_play = true;
+            }
+
+            ui.add_space(10.0);
+
+            if render_mode_selector_card(
+                ui,
+                "📋  Custom Position (FEN)",
+                "Paste any FEN string to practice specific endgames, opening tabiyas, or tactical studies against any bot.",
+                "Load FEN Position",
+                Color32::from_rgb(155, 110, 235),
+                &tokens,
+            ) {
+                actions.open_custom_fen_modal = true;
+            }
+        });
+
+    egui::CentralPanel::default().show_inside(ui, |ui| {
+        let avail = ui.available_size();
+        let board_size = (avail.x - 24.0).min(avail.y - 104.0).max(320.0);
+        let pad_x = ((avail.x - board_size) * 0.5).max(8.0);
+        let pad_y = ((avail.y - (board_size + 96.0)) * 0.5).max(4.0);
+
+        ui.add_space(pad_y);
+        ui.horizontal(|ui| {
+            ui.add_space(pad_x);
+            render_player_strip(
+                ui,
+                board_size,
+                match_state,
+                persona,
+                true,
+                false,
+                dark_mode,
+            );
+        });
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            ui.add_space(pad_x);
+            let (b_rect, _) =
+                ui.allocate_exact_size(Vec2::splat(board_size), Sense::hover());
+            render_board_grid(
+                ui.painter(),
+                b_rect,
+                &match_state.displayed_position(),
+                &board_theme.palette(),
+                false,
+                true,
+                None,
+                match_state.displayed_last_move(),
+                &[],
+                &[],
+                &[],
+                None,
+                None,
+                None,
+            );
+        });
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            ui.add_space(pad_x);
+            render_player_strip(
+                ui,
+                board_size,
+                match_state,
+                persona,
+                false,
+                false,
+                dark_mode,
+            );
+        });
+    });
+
+    actions
+}
+
+fn render_mode_selector_card(
+    ui: &mut Ui,
+    title: &str,
+    subtitle: &str,
+    btn_text: &str,
+    accent: Color32,
+    tokens: &UiTokens,
+) -> bool {
+    let mut clicked = false;
+    egui::Frame::none()
+        .fill(tokens.bg_surface)
+        .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
+        .rounding(Rounding::same(8.0_f32))
+        .inner_margin(egui::Margin::same(12.0))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.label(
+                RichText::new(title)
+                    .strong()
+                    .size(15.0)
+                    .color(tokens.text_primary),
+            );
+            ui.add_space(4.0);
+            ui.label(
+                RichText::new(subtitle)
+                    .size(11.5)
+                    .color(tokens.text_secondary),
+            );
+            ui.add_space(8.0);
+            if ui
+                .add_sized(
+                    [ui.available_width(), 32.0],
+                    egui::Button::new(
+                        RichText::new(btn_text)
+                            .strong()
+                            .size(13.0)
+                            .color(Color32::WHITE),
+                    )
+                    .fill(accent),
+                )
+                .clicked()
+            {
+                clicked = true;
+            }
+        });
+    clicked
+}
