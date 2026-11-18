@@ -2,8 +2,8 @@ use crate::domain::{
     clock::{ChessClock, TimeControl},
     notation::{format_fen, format_san, parse_fen, position_zobrist_hash, INITIAL_FEN},
     types::{
-        role_point_value, role_sort_priority, GameOutcome, MoveRecord, PlayerController,
-        TacticalArrow,
+        role_point_value, role_sort_priority, GameOutcome, MarkedSquare, MoveRecord,
+        PlayerController, TacticalArrow,
     },
 };
 use shakmaty::{Chess, Color, Move, Position, Role, Square};
@@ -26,7 +26,7 @@ pub struct ChessMatchState {
     pub outcome: GameOutcome,
     pub clock: ChessClock,
     pub arrows: Vec<TacticalArrow>,
-    pub marked_squares: Vec<Square>,
+    pub marked_squares: Vec<MarkedSquare>,
 }
 
 impl ChessMatchState {

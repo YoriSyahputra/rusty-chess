@@ -10,6 +10,7 @@ pub use notation::{
     INITIAL_FEN,
 };
 pub use types::{
-    role_point_value, role_sort_priority, Color, File, GameOutcome, Move, MoveRecord, PieceKind,
-    PlayerController, Position, Rank, Role, Side, Square, TacticalArrow,
+    role_point_value, role_sort_priority, AnnotationColor, Color, File, GameOutcome, MarkedSquare,
+    Move, MoveRecord, PieceKind, PlayerController, Position, Rank, Role, Side, Square,
+    TacticalArrow,
 };

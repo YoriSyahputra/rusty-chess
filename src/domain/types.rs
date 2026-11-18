@@ -9,6 +9,20 @@ pub enum PlayerController {
     Bot,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum AnnotationColor {
+    Red,
+    Yellow,
+    Blue,
+    Green,
+}
+
+impl Default for AnnotationColor {
+    fn default() -> Self {
+        AnnotationColor::Red
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MoveRecord {
     pub ply: usize,                   // Nomor setengah langkah (dimulai dari 1)
@@ -89,6 +103,19 @@ impl GameOutcome {
 pub struct TacticalArrow {
     pub from: Square,
     pub to: Square,
+    pub color: AnnotationColor,
+}
+
+impl TacticalArrow {
+    pub fn new(from: Square, to: Square, color: AnnotationColor) -> Self {
+        Self { from, to, color }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MarkedSquare {
+    pub square: Square,
+    pub color: AnnotationColor,
 }
 
 /// Poin material standar untuk perhitungan selisih bidak (Q=9, R=5, B=3, N=3, P=1)

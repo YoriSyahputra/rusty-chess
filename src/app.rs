@@ -5,8 +5,8 @@ use crate::{
         UserConfig,
     },
     domain::{
-        format_fen, ChessMatchState, Color, GameOutcome, Move, PlayerController, Role,
-        TacticalArrow, TimeControl,
+        format_fen, AnnotationColor, ChessMatchState, Color, GameOutcome, Move, PlayerController,
+        Role, TacticalArrow, TimeControl,
     },
     engine::{
         bot::{
@@ -370,14 +370,23 @@ impl RustyChessApp {
                     if self.is_hint_search {
                         self.is_hint_search = false;
                         if let Some(from) = best_move.from() {
-                            self.board_ui.hint_arrow = Some(TacticalArrow {
+                            self.board_ui.hint_arrow = Some(TacticalArrow::new(
                                 from,
-                                to: best_move.to(),
-                            });
+                                best_move.to(),
+                                AnnotationColor::Green,
+                            ));
                         }
                         self.eval_bar.set_eval_cp(eval_cp);
                     } else {
                         self.execute_move_and_update(best_move, Some(eval_cp), elapsed_ms, true);
+                        // Execute queued premove in 0 ms if legal!
+                        if !self.match_state.outcome.is_game_over() {
+                            if let Some(premove_mv) =
+                                self.board_ui.try_consume_premove(&self.match_state)
+                            {
+                                self.execute_move_and_update(premove_mv, None, 0, false);
+                            }
+                        }
                     }
                 }
             }
@@ -389,6 +398,9 @@ impl RustyChessApp {
             return;
         }
         self.match_result_recorded = true;
+        self.board_ui
+            .anim_layer
+            .update_result_glyphs(&self.match_state.current_pos, self.match_state.outcome);
         let human_color = self.match_state.human_color;
         let won = self.match_state.outcome.winner().map(|w| w == human_color);
         let crowns = if won == Some(true) {
@@ -443,20 +455,30 @@ impl RustyChessApp {
         };
 
         let prev_eval_white = self.last_eval_cp_white;
+        let pos_before = self.match_state.current_pos.clone();
 
-        let mut next_pos = self.match_state.current_pos.clone();
+        let mut next_pos = pos_before.clone();
         next_pos.play_unchecked(&mv);
         let new_eval_white = precomputed_eval_white
             .unwrap_or_else(|| evaluate_for_white(&next_pos, &self.bot_persona.weights));
 
         if self
             .match_state
-            .apply_move(mv, new_eval_white, elapsed_ms)
+            .apply_move(mv.clone(), new_eval_white, elapsed_ms)
             .is_err()
         {
             self.audio.play(SoundEffect::Illegal);
             return;
         }
+
+        // Trigger decoupled BoardAnimationLayer (5 speeds, capture fades, check pulse, King badges)
+        self.board_ui.anim_layer.trigger_move_animation(
+            &pos_before,
+            &self.match_state.current_pos,
+            &mv,
+            self.match_state.outcome,
+            self.config.animation_profile,
+        );
 
         self.eval_bar.set_eval_cp(new_eval_white);
         self.last_eval_cp_white = new_eval_white;
@@ -1086,13 +1108,11 @@ impl eframe::App for RustyChessApp {
                             ui.add_space(8.0);
                         }
 
-                        if let Some(human_mv) = self.board_ui.ui(
+                        if let Some(human_mv) = self.board_ui.ui_with_config(
                             ui,
                             board_size,
                             &mut self.match_state,
-                            self.config.board_theme,
-                            self.config.board_flipped,
-                            self.config.show_coordinates,
+                            &self.config,
                         ) {
                             let spent_ms = self.human_turn_started_at.elapsed().as_millis() as u64;
                             self.execute_move_and_update(human_mv, None, spent_ms, false);
@@ -1136,7 +1156,10 @@ impl eframe::App for RustyChessApp {
         self.show_settings_modal_window(ctx);
 
         // Strict Reactive Repaint Mode (NEW_DESIGN.md Section 6.4)
-        if self.eval_bar.is_lerping() || self.board_ui.dragging_from.is_some() {
+        if !self.board_ui.anim_layer.is_idle()
+            || self.eval_bar.is_lerping()
+            || self.board_ui.dragging_from.is_some()
+        {
             ctx.request_repaint();
         } else if self.is_engine_thinking || clock_actively_ticking {
             ctx.request_repaint_after(Duration::from_millis(100));

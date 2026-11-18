@@ -1,5 +1,5 @@
 use crate::{
-    domain::TacticalArrow,
+    domain::{AnnotationColor, MarkedSquare, TacticalArrow},
     ui::{piece_renderer::draw_chess_piece, theme::BoardPalette},
 };
 use egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
@@ -46,6 +46,15 @@ pub fn pos_to_square(board_rect: Rect, pos: Pos2, flipped: bool) -> Option<Squar
     ))
 }
 
+pub fn resolve_annotation_color(color: AnnotationColor, palette: &BoardPalette) -> Color32 {
+    match color {
+        AnnotationColor::Red => palette.arrow_red,
+        AnnotationColor::Yellow => palette.arrow_yellow,
+        AnnotationColor::Blue => palette.arrow_blue,
+        AnnotationColor::Green => palette.arrow_green,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn render_board_grid(
     painter: &Painter,
@@ -57,18 +66,56 @@ pub fn render_board_grid(
     selected_sq: Option<Square>,
     last_move: Option<(Square, Square)>,
     legal_moves_for_selected: &[Move],
-    marked_squares: &[Square],
+    marked_squares: &[MarkedSquare],
     arrows: &[TacticalArrow],
     preview_arrow: Option<TacticalArrow>,
     hint_arrow: Option<TacticalArrow>,
     dragged_from: Option<Square>,
 ) {
+    render_board_grid_ext(
+        painter,
+        board_rect,
+        pos,
+        palette,
+        flipped,
+        show_coordinates,
+        selected_sq,
+        last_move,
+        None,
+        legal_moves_for_selected,
+        marked_squares,
+        arrows,
+        preview_arrow,
+        hint_arrow,
+        dragged_from,
+        &[],
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn render_board_grid_ext(
+    painter: &Painter,
+    board_rect: Rect,
+    pos: &Chess,
+    palette: &BoardPalette,
+    flipped: bool,
+    show_coordinates: bool,
+    selected_sq: Option<Square>,
+    last_move: Option<(Square, Square)>,
+    premove_squares: Option<(Square, Square)>,
+    legal_moves_for_selected: &[Move],
+    marked_squares: &[MarkedSquare],
+    arrows: &[TacticalArrow],
+    preview_arrow: Option<TacticalArrow>,
+    hint_arrow: Option<TacticalArrow>,
+    dragged_from: Option<Square>,
+    hidden_squares: &[Square],
+) {
     let sq_size = board_rect.width() / 8.0;
     let board = pos.board();
 
-    // Outer frame shadow & border
     let frame_rect = board_rect.expand(4.0);
-    painter.rect_filled(frame_rect, Rounding::same(6.0), palette.border_bg);
+    painter.rect_filled(frame_rect, Rounding::same(6.0_f32), palette.border_bg);
 
     let king_in_check_sq = if pos.is_check() {
         board.king_of(pos.turn())
@@ -88,7 +135,7 @@ pub fn render_board_grid(
 
         painter.rect_filled(sq_rect, Rounding::ZERO, base_color);
 
-        // Last move highlight
+        // Last move highlight (#FFFF33)
         if let Some((from, to)) = last_move {
             if sq == from {
                 painter.rect_filled(sq_rect, Rounding::ZERO, palette.last_move_from);
@@ -97,14 +144,22 @@ pub fn render_board_grid(
             }
         }
 
+        // Queued Premove highlight (#E04F44)
+        if let Some((p_from, p_to)) = premove_squares {
+            if sq == p_from || sq == p_to {
+                painter.rect_filled(sq_rect, Rounding::ZERO, palette.premove_square);
+            }
+        }
+
         // Selected square highlight
         if selected_sq == Some(sq) {
             painter.rect_filled(sq_rect, Rounding::ZERO, palette.selected_square);
         }
 
-        // Right-click marked square highlight
-        if marked_squares.contains(&sq) {
-            painter.rect_filled(sq_rect, Rounding::ZERO, palette.marked_square);
+        // 4-color right-click marked square highlight
+        if let Some(marked) = marked_squares.iter().find(|m| m.square == sq) {
+            let c = resolve_annotation_color(marked.color, palette).gamma_multiply(0.65);
+            painter.rect_filled(sq_rect, Rounding::ZERO, c);
         }
 
         // King in check red radial/layered glow
@@ -127,7 +182,6 @@ pub fn render_board_grid(
     if show_coordinates {
         let font = FontId::proportional((sq_size * 0.165).clamp(9.5, 14.0));
         for idx in 0..8usize {
-            // Rank labels di kolom paling kiri visual (col = 0)
             let rank_idx = if flipped { idx } else { 7 - idx };
             let file_left = if flipped { 7 } else { 0 };
             let left_sq = Square::from_coords(
@@ -149,7 +203,6 @@ pub fn render_board_grid(
                 text_color,
             );
 
-            // File labels di baris paling bawah visual (row = 7)
             let file_idx = if flipped { 7 - idx } else { idx };
             let rank_bottom = if flipped { 7 } else { 0 };
             let bottom_sq = Square::from_coords(
@@ -174,9 +227,9 @@ pub fn render_board_grid(
         }
     }
 
-    // 3. Render bidak di atas papan (kecuali bidak yang sedang di-drag)
+    // 3. Render bidak statis (kecuali yang sedang di-drag atau sedang beranimasi meluncur)
     for sq in Square::ALL {
-        if dragged_from == Some(sq) {
+        if dragged_from == Some(sq) || hidden_squares.contains(&sq) {
             continue;
         }
         if let Some(piece) = board.piece_at(sq) {
@@ -192,7 +245,7 @@ pub fn render_board_grid(
         }
     }
 
-    // 4. Render indikator langkah legal (titik transparan untuk langkah kosong, cincin untuk capture)
+    // 4. Render indikator langkah legal (titik transparan & cincin capture)
     let mut drawn_targets = [false; 64];
     for mv in legal_moves_for_selected {
         let to_sq = mv.to();
@@ -218,33 +271,17 @@ pub fn render_board_grid(
         }
     }
 
-    // 5. Render Hint Arrow (hijau) & Tactical Arrows (oranye)
+    // 5. Render Hint Arrow & 4-Color Tactical Arrows
     if let Some(hint) = hint_arrow {
-        draw_tactical_arrow(
-            painter,
-            board_rect,
-            hint,
-            flipped,
-            palette.arrow_hint,
-        );
+        draw_tactical_arrow(painter, board_rect, hint, flipped, palette.arrow_hint);
     }
     for &arrow in arrows {
-        draw_tactical_arrow(
-            painter,
-            board_rect,
-            arrow,
-            flipped,
-            palette.arrow_tactical,
-        );
+        let color = resolve_annotation_color(arrow.color, palette);
+        draw_tactical_arrow(painter, board_rect, arrow, flipped, color);
     }
     if let Some(preview) = preview_arrow {
-        draw_tactical_arrow(
-            painter,
-            board_rect,
-            preview,
-            flipped,
-            palette.arrow_tactical,
-        );
+        let color = resolve_annotation_color(preview.color, palette);
+        draw_tactical_arrow(painter, board_rect, preview, flipped, color);
     }
 }
 
@@ -283,7 +320,6 @@ pub fn draw_tactical_arrow(
     let tip = p2 - dir * (sq_size * 0.06);
     let head_base = p2 - dir * (sq_size * 0.36);
 
-    // Batang panah (shaft)
     let shaft_half = sq_size * 0.075;
     let shaft_poly = vec![
         start + perp * shaft_half,
@@ -293,7 +329,6 @@ pub fn draw_tactical_arrow(
     ];
     painter.add(Shape::convex_polygon(shaft_poly, color, Stroke::NONE));
 
-    // Kepala panah segitiga (arrowhead)
     let head_half = sq_size * 0.22;
     let head_poly = vec![
         tip,
