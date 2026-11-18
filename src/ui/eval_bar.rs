@@ -23,7 +23,11 @@ impl EvalBarState {
         self.target_eval_cp = eval_cp_white;
     }
 
-    /// Menghitung proporsi keunggulan Putih menggunakan kurva sigmoid sesuai SPEC.md:
+    pub fn is_lerping(&self) -> bool {
+        (self.target_ratio() - self.displayed_white_ratio).abs() > 0.005
+    }
+
+    /// Menghitung proporsi keunggulan Putih menggunakan kurva sigmoid:
     /// `1.0 / (1.0 + (-eval_cp as f32 / 400.0).exp())`
     pub fn target_ratio(&self) -> f32 {
         if self.target_eval_cp > MATE_THRESHOLD {
@@ -59,16 +63,16 @@ impl EvalBarState {
         }
     }
 
-    /// Merender Vertical Evaluation Bar selebar `26px` dan tinggi mengikuti papan catur.
+    /// Merender Vertical Evaluation Bar selebar `28px` dan tinggi mengikuti papan catur.
     pub fn ui(&mut self, ui: &mut Ui, height: f32, board_flipped: bool) {
-        let bar_width = 26.0;
+        let bar_width = 28.0;
         let (rect, _resp) =
             ui.allocate_exact_size(Vec2::new(bar_width, height), Sense::hover());
 
         let target = self.target_ratio();
         let diff = target - self.displayed_white_ratio;
-        if diff.abs() > 0.0015 {
-            self.displayed_white_ratio += diff * 0.16;
+        if diff.abs() > 0.005 {
+            self.displayed_white_ratio += diff * 0.18;
             ui.ctx().request_repaint();
         } else {
             self.displayed_white_ratio = target;
@@ -77,9 +81,8 @@ impl EvalBarState {
         let painter = ui.painter_at(rect);
         let white_fill = Color32::from_rgb(236, 238, 242);
         let black_fill = Color32::from_rgb(38, 41, 48);
-        let rounding = Rounding::same(4.0);
+        let rounding = Rounding::same(4.0_f32);
 
-        // Background (sisi atas)
         let top_is_black = !board_flipped;
         let top_color = if top_is_black { black_fill } else { white_fill };
         let bottom_color = if top_is_black { white_fill } else { black_fill };
@@ -108,18 +111,16 @@ impl EvalBarState {
             Stroke::new(1.2_f32, Color32::from_rgba_unmultiplied(120, 130, 145, 160)),
         );
 
-        // Border luar
         painter.rect_stroke(
             rect,
             rounding,
             Stroke::new(1.0_f32, Color32::from_rgb(65, 70, 82)),
         );
 
-        // Label angka evaluasi (+1.4, -0.8, M3)
         let label = self.formatted_score();
         let white_advantage = self.target_eval_cp >= 0;
-        let label_at_bottom = (white_advantage && !board_flipped)
-            || (!white_advantage && board_flipped);
+        let label_at_bottom =
+            (white_advantage && !board_flipped) || (!white_advantage && board_flipped);
 
         let (text_pos, text_align, text_color) = if label_at_bottom {
             let fg = if bottom_color == white_fill {

@@ -5,24 +5,47 @@ use std::time::Instant;
 pub enum TimeControl {
     Unlimited,
     Bullet1_0,
+    Bullet1_1,
     Bullet2_1,
     Blitz3_0,
     Blitz3_2,
     Blitz5_0,
+    Blitz5_5,
     Rapid10_0,
+    Rapid15_10,
+    Classical30_0,
     Custom { initial_ms: u64, increment_ms: u64 },
 }
 
 impl TimeControl {
     pub fn label(&self) -> &'static str {
         match self {
-            TimeControl::Unlimited => "Unlimited",
-            TimeControl::Bullet1_0 => "Bullet 1+0",
-            TimeControl::Bullet2_1 => "Bullet 2+1",
-            TimeControl::Blitz3_0 => "Blitz 3+0",
-            TimeControl::Blitz3_2 => "Blitz 3+2",
-            TimeControl::Blitz5_0 => "Blitz 5+0",
-            TimeControl::Rapid10_0 => "Rapid 10+0",
+            TimeControl::Unlimited => "Untimed",
+            TimeControl::Bullet1_0 => "1 min",
+            TimeControl::Bullet1_1 => "1+1",
+            TimeControl::Bullet2_1 => "2+1",
+            TimeControl::Blitz3_0 => "3 min",
+            TimeControl::Blitz3_2 => "3+2",
+            TimeControl::Blitz5_0 => "5 min",
+            TimeControl::Blitz5_5 => "5+5",
+            TimeControl::Rapid10_0 => "10 min",
+            TimeControl::Rapid15_10 => "15+10",
+            TimeControl::Classical30_0 => "30 min",
+            TimeControl::Custom { .. } => "Custom",
+        }
+    }
+
+    pub fn category(&self) -> &'static str {
+        match self {
+            TimeControl::Unlimited => "Untimed",
+            TimeControl::Bullet1_0 | TimeControl::Bullet1_1 | TimeControl::Bullet2_1 => "Bullet",
+            TimeControl::Blitz3_0
+            | TimeControl::Blitz3_2
+            | TimeControl::Blitz5_0
+            | TimeControl::Blitz5_5 => "Blitz",
+            TimeControl::Rapid10_0 | TimeControl::Rapid15_10 | TimeControl::Classical30_0 => {
+                "Rapid"
+            }
             TimeControl::Custom { .. } => "Custom",
         }
     }
@@ -30,12 +53,13 @@ impl TimeControl {
     pub fn initial_time_ms(&self) -> Option<u64> {
         match *self {
             TimeControl::Unlimited => None,
-            TimeControl::Bullet1_0 => Some(60_000),
+            TimeControl::Bullet1_0 | TimeControl::Bullet1_1 => Some(60_000),
             TimeControl::Bullet2_1 => Some(120_000),
-            TimeControl::Blitz3_0 => Some(180_000),
-            TimeControl::Blitz3_2 => Some(180_000),
-            TimeControl::Blitz5_0 => Some(300_000),
+            TimeControl::Blitz3_0 | TimeControl::Blitz3_2 => Some(180_000),
+            TimeControl::Blitz5_0 | TimeControl::Blitz5_5 => Some(300_000),
             TimeControl::Rapid10_0 => Some(600_000),
+            TimeControl::Rapid15_10 => Some(900_000),
+            TimeControl::Classical30_0 => Some(1_800_000),
             TimeControl::Custom { initial_ms, .. } => Some(initial_ms),
         }
     }
@@ -46,10 +70,37 @@ impl TimeControl {
             | TimeControl::Bullet1_0
             | TimeControl::Blitz3_0
             | TimeControl::Blitz5_0
-            | TimeControl::Rapid10_0 => 0,
-            TimeControl::Bullet2_1 => 1_000,
+            | TimeControl::Rapid10_0
+            | TimeControl::Classical30_0 => 0,
+            TimeControl::Bullet1_1 | TimeControl::Bullet2_1 => 1_000,
             TimeControl::Blitz3_2 => 2_000,
+            TimeControl::Blitz5_5 => 5_000,
+            TimeControl::Rapid15_10 => 10_000,
             TimeControl::Custom { increment_ms, .. } => increment_ms,
+        }
+    }
+
+    /// Faktor skala kecepatan berpikir bot berdasarkan Time Control (Section 7.3 NEW_DESIGN.md)
+    pub fn clock_factor(&self) -> f32 {
+        match self {
+            TimeControl::Bullet1_0 | TimeControl::Bullet1_1 | TimeControl::Bullet2_1 => 0.35,
+            TimeControl::Blitz3_0
+            | TimeControl::Blitz3_2
+            | TimeControl::Blitz5_0
+            | TimeControl::Blitz5_5 => 0.65,
+            TimeControl::Rapid10_0
+            | TimeControl::Rapid15_10
+            | TimeControl::Classical30_0
+            | TimeControl::Unlimited => 1.0,
+            TimeControl::Custom { initial_ms, .. } => {
+                if *initial_ms <= 120_000 {
+                    0.35
+                } else if *initial_ms <= 300_000 {
+                    0.65
+                } else {
+                    1.0
+                }
+            }
         }
     }
 
@@ -57,11 +108,14 @@ impl TimeControl {
         &[
             TimeControl::Unlimited,
             TimeControl::Bullet1_0,
+            TimeControl::Bullet1_1,
             TimeControl::Bullet2_1,
-            TimeControl::Blitz3_0,
             TimeControl::Blitz3_2,
             TimeControl::Blitz5_0,
+            TimeControl::Blitz5_5,
             TimeControl::Rapid10_0,
+            TimeControl::Rapid15_10,
+            TimeControl::Classical30_0,
         ]
     }
 }

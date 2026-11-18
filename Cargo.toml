@@ -1,6 +1,6 @@
 [package]
 name = "rusty-chess"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Yori Syahputra Wisnu"]
 description = "Native Linux Chess Desktop Game with Grandmaster AI Personas in Pure Rust"

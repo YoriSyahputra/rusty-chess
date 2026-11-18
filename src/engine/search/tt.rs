@@ -1,6 +1,6 @@
 use shakmaty::Move;
 
-pub const TT_SIZE_BYTES: usize = 16 * 1024 * 1024; // 16 MB fixed allocation
+pub const TT_SIZE_BYTES: usize = 8 * 1024 * 1024; // 8 MB fixed allocation (262,144 slots)
 pub const MATE_SCORE: i32 = 30_000;
 pub const MATE_THRESHOLD: i32 = 29_000;
 

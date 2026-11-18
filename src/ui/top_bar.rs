@@ -52,7 +52,7 @@ pub fn render_top_bar(
             .inner_margin(egui::Margin::symmetric(6.0, 2.0))
             .show(ui, |ui| {
                 ui.label(
-                    RichText::new("v0.1.0")
+                    RichText::new("v0.2.0")
                         .size(11.0)
                         .color(Color32::from_rgb(155, 195, 255)),
                 );
