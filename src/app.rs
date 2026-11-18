@@ -13,13 +13,18 @@ use crate::{
             detect_dialogue_trigger, select_bot_dialogue, BotId, BotPersona, DialogueTrigger,
         },
         eval::{evaluate_for_white, material::compute_game_phase},
+        review::analyze_match_review,
         worker::{EngineEvent, EngineWorker},
     },
     persistence::{SavedMatchSummary, UserProfile},
     ui::{
         board_view::BoardInteractionState,
         eval_bar::EvalBarState,
-        pages::{render_bots_lobby, render_home_page, render_play_hub, BotsLobbyState},
+        modals::show_game_over_modal,
+        pages::{
+            render_bots_lobby, render_home_page, render_play_hub, render_puzzles_page,
+            render_review_page, BotsLobbyState, PuzzlesTrainerState, ReviewViewState,
+        },
         side_panel::{render_player_strip, render_side_panel, show_bot_selector_modal},
         sidebar::{render_left_sidebar, ActiveRoute},
         theme::{apply_global_style_with_mode, BoardTheme, UiTokens},
@@ -37,6 +42,8 @@ pub struct RustyChessApp {
     pub profile: UserProfile,
     pub config: UserConfig,
     pub lobby_state: BotsLobbyState,
+    pub puzzles_state: PuzzlesTrainerState,
+    pub review_state: ReviewViewState,
     pub match_state: ChessMatchState,
     pub bot_persona: BotPersona,
     pub bot_dialogue: String,
@@ -45,10 +52,12 @@ pub struct RustyChessApp {
     pub eval_bar: EvalBarState,
     pub audio: AudioEngine,
 
-    // Assistance tracking per match
+    // Assistance & Game Over tracking per match
     pub hints_used: u8,
     pub takebacks_used: u8,
     pub match_result_recorded: bool,
+    pub show_game_over: bool,
+    pub last_awarded_crowns: u8,
 
     // Engine tracking state
     pub current_request_id: u64,
@@ -104,6 +113,8 @@ impl RustyChessApp {
             profile,
             config,
             lobby_state,
+            puzzles_state: PuzzlesTrainerState::default(),
+            review_state: ReviewViewState::default(),
             match_state,
             bot_persona,
             bot_dialogue,
@@ -114,6 +125,8 @@ impl RustyChessApp {
             hints_used: 0,
             takebacks_used: 0,
             match_result_recorded: false,
+            show_game_over: false,
+            last_awarded_crowns: 0,
             current_request_id: 1,
             is_engine_thinking: false,
             is_hint_search: false,
@@ -153,11 +166,14 @@ impl RustyChessApp {
         self.match_state = state;
         self.board_ui.reset();
         self.eval_bar = EvalBarState::default();
+        self.review_state = ReviewViewState::default();
         self.last_eval_cp_white = 0;
         self.entered_endgame_announced = false;
         self.hints_used = 0;
         self.takebacks_used = 0;
         self.match_result_recorded = false;
+        self.show_game_over = false;
+        self.last_awarded_crowns = 0;
         self.has_active_match = true;
         self.active_route = ActiveRoute::Match;
         self.bot_dialogue = select_bot_dialogue(self.bot_persona.id, DialogueTrigger::MatchStart);
@@ -178,11 +194,14 @@ impl RustyChessApp {
         self.match_state = state;
         self.board_ui.reset();
         self.eval_bar = EvalBarState::default();
+        self.review_state = ReviewViewState::default();
         self.last_eval_cp_white = 0;
         self.entered_endgame_announced = false;
         self.hints_used = 0;
         self.takebacks_used = 0;
         self.match_result_recorded = false;
+        self.show_game_over = false;
+        self.last_awarded_crowns = 0;
         self.has_active_match = true;
         self.active_route = ActiveRoute::Match;
         self.bot_dialogue = "Pass & Play (2-Player Local Mode) active.".to_string();
@@ -199,11 +218,14 @@ impl RustyChessApp {
         self.match_state = state;
         self.board_ui.reset();
         self.eval_bar.set_eval_cp(initial_eval);
+        self.review_state = ReviewViewState::default();
         self.last_eval_cp_white = initial_eval;
         self.entered_endgame_announced = false;
         self.hints_used = 0;
         self.takebacks_used = 0;
         self.match_result_recorded = false;
+        self.show_game_over = false;
+        self.last_awarded_crowns = 0;
         self.has_active_match = true;
         self.active_route = ActiveRoute::Match;
         self.bot_dialogue = select_bot_dialogue(self.bot_persona.id, DialogueTrigger::MatchStart);
@@ -379,7 +401,6 @@ impl RustyChessApp {
                         self.eval_bar.set_eval_cp(eval_cp);
                     } else {
                         self.execute_move_and_update(best_move, Some(eval_cp), elapsed_ms, true);
-                        // Execute queued premove in 0 ms if legal!
                         if !self.match_state.outcome.is_game_over() {
                             if let Some(premove_mv) =
                                 self.board_ui.try_consume_premove(&self.match_state)
@@ -401,6 +422,7 @@ impl RustyChessApp {
         self.board_ui
             .anim_layer
             .update_result_glyphs(&self.match_state.current_pos, self.match_state.outcome);
+
         let human_color = self.match_state.human_color;
         let won = self.match_state.outcome.winner().map(|w| w == human_color);
         let crowns = if won == Some(true) {
@@ -408,6 +430,8 @@ impl RustyChessApp {
         } else {
             0
         };
+        self.last_awarded_crowns = crowns;
+        self.show_game_over = true;
 
         if self.bot_persona.id == BotId::AdaptiveJimmy {
             match won {
@@ -423,12 +447,21 @@ impl RustyChessApp {
             }
         }
 
+        let report = analyze_match_review(&self.match_state, 3);
+        let (player_acc, bot_acc) = match human_color {
+            Color::White => (report.white_accuracy, report.black_accuracy),
+            Color::Black => (report.black_accuracy, report.white_accuracy),
+        };
+        self.review_state.analyzed_plies_count = self.match_state.history.len();
+        self.review_state.selected_ply = report.entries.len();
+        self.review_state.report = Some(report);
+
         let summary = SavedMatchSummary {
             opponent_name: self.bot_persona.name.to_string(),
             opponent_elo: self.bot_persona.elo,
             result_label: self.match_state.outcome.description(),
-            player_accuracy: 85.0,
-            bot_accuracy: 88.0,
+            player_accuracy: player_acc,
+            bot_accuracy: bot_acc,
             moves_count: (self.match_state.history.len() + 1) / 2,
             pgn: self.match_state.export_pgn(self.bot_persona.name),
         };
@@ -471,7 +504,6 @@ impl RustyChessApp {
             return;
         }
 
-        // Trigger decoupled BoardAnimationLayer (5 speeds, capture fades, check pulse, King badges)
         self.board_ui.anim_layer.trigger_move_animation(
             &pos_before,
             &self.match_state.current_pos,
@@ -538,7 +570,6 @@ impl RustyChessApp {
                 self.bot_dialogue = select_bot_dialogue(self.bot_persona.id, trigger);
             }
 
-            // Dynamic mid-game scaling for Adaptive Jimmy (NEW_DESIGN.md Section 4.1)
             if !was_bot_move && self.bot_persona.id == BotId::AdaptiveJimmy {
                 let eval_delta_for_bot = new_bot_eval - prev_bot_eval;
                 if eval_delta_for_bot <= 25 {
@@ -560,7 +591,11 @@ impl RustyChessApp {
     }
 
     fn handle_keyboard_shortcuts(&mut self, ctx: &Context) {
-        if self.show_fen_pgn_modal || self.show_bot_selector || self.show_settings_modal {
+        if self.show_fen_pgn_modal
+            || self.show_bot_selector
+            || self.show_settings_modal
+            || self.show_game_over
+        {
             return;
         }
         ctx.input(|i| {
@@ -814,7 +849,6 @@ impl eframe::App for RustyChessApp {
             self.last_rss_poll = Instant::now();
         }
 
-        // Tick chess clock only during an active live match
         let clock_actively_ticking = self.active_route == ActiveRoute::Match
             && !self.match_state.clock.is_unlimited
             && self.match_state.outcome == GameOutcome::Ongoing
@@ -836,7 +870,6 @@ impl eframe::App for RustyChessApp {
             }
         }
 
-        // Poll background AI engine worker events
         self.poll_engine_events();
 
         if self.active_route == ActiveRoute::Match
@@ -848,12 +881,9 @@ impl eframe::App for RustyChessApp {
 
         self.handle_keyboard_shortcuts(ctx);
 
-        // 0. Persistent Left Navigation Sidebar (`Home`, `Play`, `Bots`, `Puzzles`, `Review`, `Settings`)
+        // Persistent Left Navigation Sidebar
         let win_w = ctx.screen_rect().width();
-        let compact_sidebar = self
-            .config
-            .sidebar_collapsed
-            .unwrap_or(win_w < 1100.0);
+        let compact_sidebar = self.config.sidebar_collapsed.unwrap_or(win_w < 1100.0);
         let sidebar_w = if compact_sidebar { 60.0 } else { 168.0 };
         let tokens = UiTokens::for_mode(self.config.dark_mode);
 
@@ -886,7 +916,6 @@ impl eframe::App for RustyChessApp {
                 }
             });
 
-        // Route Dispatcher
         match self.active_route {
             ActiveRoute::Home => {
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -976,8 +1005,30 @@ impl eframe::App for RustyChessApp {
                 });
             }
 
-            ActiveRoute::Match | ActiveRoute::Puzzles | ActiveRoute::Review => {
-                // Top Bar Panel inside Match / Training views
+            ActiveRoute::Puzzles => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    render_puzzles_page(
+                        ui,
+                        &mut self.puzzles_state,
+                        &mut self.profile,
+                        &self.config,
+                    );
+                });
+            }
+
+            ActiveRoute::Review => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    render_review_page(
+                        ui,
+                        &mut self.review_state,
+                        &mut self.match_state,
+                        self.bot_persona.name,
+                        &self.config,
+                    );
+                });
+            }
+
+            ActiveRoute::Match => {
                 egui::TopBottomPanel::top("top_bar")
                     .exact_height(40.0)
                     .show(ctx, |ui| {
@@ -1152,11 +1203,35 @@ impl eframe::App for RustyChessApp {
             );
         }
 
+        let go_actions = show_game_over_modal(
+            ctx,
+            &mut self.show_game_over,
+            self.match_state.outcome,
+            self.match_state.human_color,
+            &self.bot_persona,
+            self.last_awarded_crowns,
+            self.config.dark_mode,
+        );
+        if go_actions.open_game_review {
+            self.active_route = ActiveRoute::Review;
+        }
+        if go_actions.play_rematch {
+            let next_color = self.match_state.human_color.other();
+            self.start_new_match(self.bot_persona.id, next_color, self.config.time_control);
+        }
+        if go_actions.select_new_bot {
+            self.active_route = ActiveRoute::PlayBots;
+        }
+
         self.show_fen_pgn_export_modal(ctx);
         self.show_settings_modal_window(ctx);
 
         // Strict Reactive Repaint Mode (NEW_DESIGN.md Section 6.4)
+        let puzzle_anim_active = !self.puzzles_state.board_ui.anim_layer.is_idle()
+            || self.puzzles_state.board_ui.dragging_from.is_some();
+
         if !self.board_ui.anim_layer.is_idle()
+            || puzzle_anim_active
             || self.eval_bar.is_lerping()
             || self.board_ui.dragging_from.is_some()
         {

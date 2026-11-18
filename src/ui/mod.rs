@@ -1,5 +1,6 @@
 pub mod board_view;
 pub mod eval_bar;
+pub mod modals;
 pub mod pages;
 pub mod piece_renderer;
 pub mod side_panel;
