@@ -33,6 +33,7 @@ struct SearchContext<'a> {
     tt: &'a mut TranspositionTable,
     heuristics: SearchHeuristics,
     weights: EvalWeights,
+    max_q_depth: u8,
     root_turn: Color,
     game_history_hashes: &'a [u64],
     path_hashes: Vec<u64>,
@@ -60,7 +61,6 @@ impl<'a> SearchContext<'a> {
 
     #[inline]
     fn draw_score(&self, current_turn: Color) -> i32 {
-        // Jika contempt > 0, bot menghindari remis
         if current_turn == self.root_turn {
             -self.weights.contempt_cp
         } else {
@@ -114,6 +114,7 @@ impl<'a> SearchContext<'a> {
                 alpha,
                 beta,
                 0,
+                self.max_q_depth,
                 ply,
                 &self.weights,
                 &mut self.nodes,
@@ -123,7 +124,6 @@ impl<'a> SearchContext<'a> {
         self.nodes += 1;
         let orig_alpha = alpha;
 
-        // 1. Transposition Table Probe
         let mut tt_best_move: Option<Move> = None;
         if let Some(entry) = self.tt.probe(hash) {
             tt_best_move = entry.best_move.clone();
@@ -209,7 +209,7 @@ impl<'a> SearchContext<'a> {
     }
 }
 
-/// Menjalankan Iterative Deepening + Negamax Alpha-Beta Pruning sesuai persona bot.
+/// Menjalankan Iterative Deepening + Negamax Alpha-Beta Pruning beserta Root Multi-PV Softmax Sampling.
 pub fn search_best_move<F>(
     pos: &Chess,
     persona: &BotPersona,
@@ -232,10 +232,20 @@ where
     let max_depth = persona.max_depth.max(1);
     let root_turn = pos.turn();
 
+    // Quiescence depth scaled by ELO (NEW_DESIGN.md Section 7.1)
+    let max_q_depth = if persona.elo <= 400 {
+        0
+    } else if persona.elo <= 1200 {
+        2
+    } else {
+        6
+    };
+
     let mut ctx = SearchContext {
         tt,
         heuristics: SearchHeuristics::new(),
         weights: persona.weights,
+        max_q_depth,
         root_turn,
         game_history_hashes,
         path_hashes: Vec::with_capacity(64),
@@ -251,7 +261,6 @@ where
     let mut depth_reached = 1u8;
 
     for depth in 1..=max_depth {
-        // Pastikan depth 1 selalu tereksekusi penuh walaupun waktu mepet
         if depth > 1
             && (ctx.abort_flag.load(Ordering::Relaxed) || Instant::now() >= ctx.deadline)
         {
@@ -325,8 +334,8 @@ where
 
     completed_candidates.sort_by_key(|(_, s)| -(*s));
 
-    // Sistem Simulasi Blunder / Ketidaksempurnaan Manusia pada Root Node
-    let chosen_pair = select_move_with_persona_noise(&completed_candidates, persona);
+    // Root Multi-PV Boltzmann / Softmax Sampling (NEW_DESIGN.md Section 7.1)
+    let chosen_pair = sample_root_move_softmax(&completed_candidates, persona);
     let eval_cp_white = match root_turn {
         Color::White => chosen_pair.1,
         Color::Black => -chosen_pair.1,
@@ -344,46 +353,61 @@ where
     })
 }
 
-fn select_move_with_persona_noise(
+/// Memilih langkah dari kandidat root menggunakan distribusi Boltzmann / Softmax:
+/// `P(m_i) = exp((s_i - s_0) / T) / sum_j exp((s_j - s_0) / T)`
+fn sample_root_move_softmax(
     candidates: &[(Move, i32)],
     persona: &BotPersona,
 ) -> (Move, i32) {
     let best = candidates[0].clone();
 
-    if candidates.len() == 1 || (persona.noise_cp <= 0 && persona.blunder_chance <= 0.0) {
+    let temp = if persona.softmax_temp_cp > 0.0 {
+        persona.softmax_temp_cp
+    } else if persona.noise_cp > 5 && persona.elo < 2600 {
+        persona.noise_cp as f32
+    } else {
+        0.0
+    };
+
+    if candidates.len() == 1 || temp <= 0.0 || persona.elo >= 2600 {
         return best;
     }
 
-    // Jika ada skakmat paksa dan bukan bot pemula (Martin), selalu ambil skakmat
+    // Untuk bot ELO >= 1000, jangan pernah melewatkan skakmat paksa
     if best.1 > MATE_THRESHOLD && persona.elo >= 1000 {
         return best;
     }
 
-    let mut rng = rand::thread_rng();
-    let is_blunder_triggered =
-        persona.blunder_chance > 0.0 && rng.gen::<f32>() < persona.blunder_chance;
+    let s0 = best.1 as f32;
+    let mut weights: Vec<f32> = Vec::with_capacity(candidates.len());
+    let mut sum_w = 0.0_f32;
 
-    let effective_noise = if is_blunder_triggered {
-        (persona.noise_cp * 2).max(160)
-    } else {
-        persona.noise_cp
-    };
+    for (_, score) in candidates {
+        let delta = (*score as f32) - s0; // <= 0.0
+        // Dampen severe blunders for bots above 1200 ELO
+        if persona.elo >= 1200 && delta < -180.0 {
+            weights.push(0.0);
+            continue;
+        }
+        let w = (delta / temp).clamp(-20.0, 0.0).exp();
+        weights.push(w);
+        sum_w += w;
+    }
 
-    if effective_noise <= 0 {
+    if sum_w <= f32::EPSILON {
         return best;
     }
 
-    let mut best_noisy_idx = 0usize;
-    let mut best_noisy_score = i32::MIN;
+    let mut rng = rand::thread_rng();
+    let sample = rng.gen::<f32>() * sum_w;
+    let mut accum = 0.0_f32;
 
-    for (idx, (_, raw_score)) in candidates.iter().enumerate() {
-        let delta = rng.gen_range(-effective_noise..=effective_noise);
-        let noisy_score = raw_score.saturating_add(delta);
-        if noisy_score > best_noisy_score {
-            best_noisy_score = noisy_score;
-            best_noisy_idx = idx;
+    for (idx, &w) in weights.iter().enumerate() {
+        accum += w;
+        if sample <= accum {
+            return candidates[idx].clone();
         }
     }
 
-    candidates[best_noisy_idx].clone()
+    best
 }

@@ -284,11 +284,14 @@ impl RustyChessApp {
         self.thinking_nodes = 0;
         self.search_started_at = Some(Instant::now());
 
-        self.engine_worker.request_move(
+        self.engine_worker.request_move_with_pacing(
             self.current_request_id,
             self.match_state.current_pos.clone(),
             self.bot_persona.clone(),
             self.match_state.position_hashes.clone(),
+            self.match_state.history.len(),
+            self.config.time_control.clock_factor(),
+            true,
         );
     }
 
@@ -313,11 +316,14 @@ impl RustyChessApp {
         self.thinking_nodes = 0;
         self.search_started_at = Some(Instant::now());
 
-        self.engine_worker.request_move(
+        self.engine_worker.request_move_with_pacing(
             self.current_request_id,
             self.match_state.current_pos.clone(),
             hint_persona,
             self.match_state.position_hashes.clone(),
+            self.match_state.history.len(),
+            1.0,
+            false,
         );
     }
 
@@ -508,6 +514,19 @@ impl RustyChessApp {
                 entered_endgame_now,
             ) {
                 self.bot_dialogue = select_bot_dialogue(self.bot_persona.id, trigger);
+            }
+
+            // Dynamic mid-game scaling for Adaptive Jimmy (NEW_DESIGN.md Section 4.1)
+            if !was_bot_move && self.bot_persona.id == BotId::AdaptiveJimmy {
+                let eval_delta_for_bot = new_bot_eval - prev_bot_eval;
+                if eval_delta_for_bot <= 25 {
+                    self.profile.adaptive_jimmy_elo =
+                        (self.profile.adaptive_jimmy_elo + 25).min(2200);
+                } else if eval_delta_for_bot >= 140 {
+                    self.profile.adaptive_jimmy_elo =
+                        self.profile.adaptive_jimmy_elo.saturating_sub(45).max(400);
+                }
+                self.bot_persona = BotPersona::adaptive_jimmy(self.profile.adaptive_jimmy_elo);
             }
         }
 

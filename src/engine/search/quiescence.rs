@@ -7,12 +7,13 @@ use shakmaty::{Chess, Move, Position, Role};
 pub const MAX_QUIESCENCE_DEPTH: u8 = 6;
 
 /// Quiescence search untuk mencegah Horizon Effect pada akhir pencarian Negamax (`depth == 0`).
-/// Hanya menelusuri langkah Captures dan Queen Promotions hingga maksimal 6 ply tambahan.
+/// Batas kedalaman (`max_q_depth`) diskalakan menurut ELO bot (0 untuk ELO <= 400, 2 untuk 450-1200, 6 untuk 1300+).
 pub fn quiescence_search(
     pos: &Chess,
     mut alpha: i32,
     beta: i32,
     q_depth: u8,
+    max_q_depth: u8,
     ply: i32,
     weights: &EvalWeights,
     nodes: &mut u64,
@@ -34,7 +35,7 @@ pub fn quiescence_search(
         alpha = stand_pat;
     }
 
-    if q_depth >= MAX_QUIESCENCE_DEPTH {
+    if q_depth >= max_q_depth {
         return alpha;
     }
 
@@ -48,7 +49,6 @@ pub fn quiescence_search(
         return alpha;
     }
 
-    // Urutkan langkah taktis dengan MVV-LVA
     tactical_moves.sort_by_cached_key(|mv| {
         let promo_bonus = mv.promotion().map(piece_value).unwrap_or(0);
         let victim_val = match mv {
@@ -69,6 +69,7 @@ pub fn quiescence_search(
             -beta,
             -alpha,
             q_depth + 1,
+            max_q_depth,
             ply + 1,
             weights,
             nodes,
