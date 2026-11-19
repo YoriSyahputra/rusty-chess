@@ -353,8 +353,8 @@ where
     })
 }
 
-/// Memilih langkah dari kandidat root menggunakan distribusi Boltzmann / Softmax:
-/// `P(m_i) = exp((s_i - s_0) / T) / sum_j exp((s_j - s_0) / T)`
+/// Memilih langkah dari kandidat root menggunakan distribusi Boltzmann / Softmax
+/// yang terkalibrasi realistis per rating ELO (mencegah bot 1100+ melakukan blunder gratis).
 fn sample_root_move_softmax(
     candidates: &[(Move, i32)],
     persona: &BotPersona,
@@ -363,29 +363,46 @@ fn sample_root_move_softmax(
 
     let temp = if persona.softmax_temp_cp > 0.0 {
         persona.softmax_temp_cp
-    } else if persona.noise_cp > 5 && persona.elo < 2600 {
+    } else if persona.noise_cp > 5 && persona.elo < 2450 {
         persona.noise_cp as f32
     } else {
         0.0
     };
 
-    if candidates.len() == 1 || temp <= 0.0 || persona.elo >= 2600 {
+    if candidates.len() == 1 || temp <= 0.5 || persona.elo >= 2450 {
         return best;
     }
 
-    // Untuk bot ELO >= 1000, jangan pernah melewatkan skakmat paksa
-    if best.1 > MATE_THRESHOLD && persona.elo >= 1000 {
+    // Untuk bot ELO >= 800, jangan pernah melewatkan skakmat paksa!
+    if best.1 > MATE_THRESHOLD && persona.elo >= 800 {
         return best;
     }
+
+    // Batas maksimum penurunan eval (centipawn) dan lebar kandidat sesuai tier ELO
+    let (max_drop_cp, max_pool) = match persona.elo {
+        0..=550 => (900.0_f32, candidates.len()),
+        551..=799 => (320.0, 8),
+        800..=999 => (175.0, 5),
+        1000..=1199 => (115.0, 4),
+        1200..=1499 => (80.0, 4),
+        1500..=1799 => (52.0, 3),
+        1800..=2099 => (32.0, 3),
+        _ => (18.0, 2),
+    };
 
     let s0 = best.1 as f32;
-    let mut weights: Vec<f32> = Vec::with_capacity(candidates.len());
+    let pool = &candidates[..candidates.len().min(max_pool)];
+    let mut weights: Vec<f32> = Vec::with_capacity(pool.len());
     let mut sum_w = 0.0_f32;
 
-    for (_, score) in candidates {
+    for (_, score) in pool {
         let delta = (*score as f32) - s0; // <= 0.0
-        // Dampen severe blunders for bots above 1200 ELO
-        if persona.elo >= 1200 && delta < -180.0 {
+        if delta < -max_drop_cp {
+            weights.push(0.0);
+            continue;
+        }
+        // Jangan pernah memilih langkah yang langsung kena skakmat jika ada alternatif aman
+        if *score < -MATE_THRESHOLD && best.1 > -MATE_THRESHOLD && persona.elo >= 700 {
             weights.push(0.0);
             continue;
         }
@@ -405,7 +422,7 @@ fn sample_root_move_softmax(
     for (idx, &w) in weights.iter().enumerate() {
         accum += w;
         if sample <= accum {
-            return candidates[idx].clone();
+            return pool[idx].clone();
         }
     }
 

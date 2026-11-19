@@ -243,6 +243,11 @@ fn build_palette_items() -> Vec<PaletteItem> {
             cmd: PaletteCommand::ChallengeBot(BotId::Mittens),
         },
         PaletteItem {
+            label: "♕ Challenge Beth Harmon (2450 Queen's Gambit)".into(),
+            category: "Play Bot",
+            cmd: PaletteCommand::ChallengeBot(BotId::Beth),
+        },
+        PaletteItem {
             label: "👑 Challenge Nelson (1300 Early Queen)".into(),
             category: "Play Bot",
             cmd: PaletteCommand::ChallengeBot(BotId::Nelson),

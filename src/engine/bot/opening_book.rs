@@ -21,12 +21,51 @@ pub fn lookup_persona_book_move(pos: &Chess, persona: &BotPersona, ply: usize) -
         .join(" ");
 
     let candidate_sans: &[&str] = match persona.id {
-        // 1. Martin & Elani: Passive flank pawn pushes & quirky setups
-        BotId::Martin | BotId::Elani => match board_turn_key.as_str() {
+        // 1. Martin, Elani & Wayne: Passive flank pawn pushes & quirky setups
+        BotId::Martin | BotId::Elani | BotId::Wayne => match board_turn_key.as_str() {
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w" => &["a3", "h3", "g3", "b3", "c3"],
             "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b" => &["a6", "h6", "g6", "b6", "d6"],
             "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b" => &["a6", "h6", "c6", "g6"],
             _ => return try_flank_pawn_move(pos),
+        },
+
+        // 1b. Wendy: Sicilian Counter-Puncher (1...c5)
+        BotId::Wendy => match board_turn_key.as_str() {
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w" => &["e4", "c4"],
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b" => &["c5"],
+            "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b" => &["Nc6", "d6"],
+            "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b" => &["Nf6", "c5"],
+            _ => &[],
+        },
+
+        // 1c. Jade: Gambit Swashbuckler (King's Gambit 1.e4 e5 2.f4 & Benko/Scandinavian)
+        BotId::Jade => match board_turn_key.as_str() {
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w" => &["e4"],
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w" => &["f4", "Bc4"],
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b" => &["d5", "e5"],
+            "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b" => &["c5", "Nf6"],
+            _ => &[],
+        },
+
+        // 1d. David: Caro-Kann & Slav Wall
+        BotId::David => match board_turn_key.as_str() {
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w" => &["d4", "Nf3"],
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b" => &["c6"],
+            "rnbqkbnr/pp1ppppp/2p5/8/3PP3/8/PPP2PPP/RNBQKBNR b" => &["d5"],
+            "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b" => &["d5"],
+            "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b" => &["c6"],
+            _ => &[],
+        },
+
+        // 1e. Beth Harmon: Queen's Gambit & Sicilian Killer
+        BotId::Beth => match board_turn_key.as_str() {
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w" => &["d4"],
+            "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w" => &["c4"],
+            "rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w" => &["c4"],
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b" => &["c5"],
+            "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b" => &["d6", "Nc6"],
+            "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b" => &["d5", "Nf6"],
+            _ => &[],
         },
 
         // 2. Nelson: Signature early Queen attacks (1. e4 e5 2. Qh5 / 2. Bc4 / Qf3)

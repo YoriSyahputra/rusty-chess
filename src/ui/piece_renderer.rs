@@ -896,16 +896,16 @@ pub fn draw_bot_avatar_with_mood(
 
     // Emblem unik per persona
     match bot_id {
-        BotId::Martin | BotId::Elani | BotId::Jimmy | BotId::Aron => {
+        BotId::Martin | BotId::Elani | BotId::Wayne | BotId::Jimmy | BotId::Aron | BotId::Maria => {
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Pawn, false);
         }
-        BotId::Warung | BotId::Emir | BotId::Sven | BotId::AdaptiveJimmy => {
+        BotId::Warung | BotId::Emir | BotId::Sven | BotId::Wendy | BotId::AdaptiveJimmy => {
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Knight, false);
         }
-        BotId::Nelson => {
+        BotId::Nelson | BotId::Beth => {
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Queen, false);
         }
-        BotId::Club | BotId::Antonio | BotId::Isabel | BotId::Wally => {
+        BotId::Club | BotId::Jade | BotId::Antonio | BotId::Isabel | BotId::David | BotId::Wally => {
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Bishop, false);
         }
         BotId::Li | BotId::Noam | BotId::Francis | BotId::Danny => {

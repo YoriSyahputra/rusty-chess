@@ -289,7 +289,7 @@ impl UserProfile {
         let puzzle_norm = ((self.puzzle_rating as f32 - 600.0) / 1800.0).clamp(0.20, 0.98);
         let tactics = (puzzle_norm * 0.65 + (avg_acc / 100.0) * 0.35).clamp(0.20, 0.98);
 
-        let crown_norm = (self.total_crowns() as f32 / 54.0).clamp(0.0, 1.0);
+        let crown_norm = (self.total_crowns() as f32 / 72.0).clamp(0.0, 1.0);
         let endgame = (0.35 + win_rate * 0.40 + crown_norm * 0.25).clamp(0.20, 0.98);
 
         let avg_moves = if self.recent_matches.is_empty() {

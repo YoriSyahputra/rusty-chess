@@ -79,7 +79,7 @@ pub fn detect_dialogue_trigger(
 
 pub fn dialogue_bank(bot_id: BotId, trigger: DialogueTrigger) -> &'static [&'static str] {
     match bot_id {
-        BotId::Martin | BotId::Elani | BotId::Jimmy | BotId::Aron => match trigger {
+        BotId::Martin | BotId::Elani | BotId::Wayne | BotId::Jimmy | BotId::Aron | BotId::Maria => match trigger {
             DialogueTrigger::MatchStart => &[
                 "Halo! Aku baru belajar cara jalan Kuda kemarin sore. Jangan galak-galak ya!",
                 "Hi there! Let's have a fun, relaxed game of chess today!",
@@ -225,7 +225,7 @@ pub fn dialogue_bank(bot_id: BotId, trigger: DialogueTrigger) -> &'static [&'sta
             ],
         },
 
-        BotId::Warung | BotId::Emir | BotId::Sven | BotId::AdaptiveJimmy => match trigger {
+        BotId::Warung | BotId::Emir | BotId::Sven | BotId::Wendy | BotId::AdaptiveJimmy => match trigger {
             DialogueTrigger::MatchStart => &[
                 "Sini duduk dulu, kopi hitamnya diseruput. Jangan buru-buru majukan Ratu!",
                 "Let's have a solid tactical match! Ready when you are.",
@@ -273,8 +273,10 @@ pub fn dialogue_bank(bot_id: BotId, trigger: DialogueTrigger) -> &'static [&'sta
         },
 
         BotId::Club
+        | BotId::Jade
         | BotId::Antonio
         | BotId::Isabel
+        | BotId::David
         | BotId::Wally
         | BotId::Li
         | BotId::Noam
@@ -324,6 +326,37 @@ pub fn dialogue_bank(bot_id: BotId, trigger: DialogueTrigger) -> &'static [&'sta
             DialogueTrigger::GameOverDraw => &[
                 "Hasil seri yang adil setelah pertarungan posisional yang ketat!",
             ],
+        },
+
+        BotId::Beth => match trigger {
+            DialogueTrigger::MatchStart => &[
+                "The Queen's Gambit Declined? Good. Let's see how deep your visualization goes.",
+                "I've already played the first twelve moves on the ceiling. Your turn.",
+            ],
+            DialogueTrigger::OpeningPhase => &[
+                "Control the center, open the c-file, and never play passively.",
+                "An interesting choice. Let's sharpen the tension right away.",
+            ],
+            DialogueTrigger::BotCapturesPiece => &[
+                "That piece was hanging three moves ago. Now it's mine.",
+                "Clean tactical conversion—one step closer to the King.",
+            ],
+            DialogueTrigger::PlayerBlunders => &[
+                "You missed the tactical nuance. That weakens your entire dark-square complex.",
+                "A fatal slip. From here the combination plays itself.",
+            ],
+            DialogueTrigger::PlayerGreatMove => &[
+                "Brilliant. You actually saw the hidden counterplay.",
+                "Impressive resource! Now this is a real game of chess.",
+            ],
+            DialogueTrigger::BotInCheck => &["A sharp check, but my King has an escape square."],
+            DialogueTrigger::BotGivesCheck => &["Check. Every square around your King is covered."],
+            DialogueTrigger::EndgameEntered => &["Pure technique now. No tricks left—just precision."],
+            DialogueTrigger::BotWinning => &["The position is completely winning. Care to resign?"],
+            DialogueTrigger::BotLosing => &["I'm under pressure, but I refuse to fold without counterplay."],
+            DialogueTrigger::GameOverWin => &["Checkmate. Thank you for the game."],
+            DialogueTrigger::GameOverLoss => &["You outcalculated me today. Well played."],
+            DialogueTrigger::GameOverDraw => &["A tense, razor-sharp draw. Let's play again."],
         },
 
         BotId::Hikaru => match trigger {

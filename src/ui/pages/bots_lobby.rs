@@ -172,18 +172,40 @@ pub fn render_bots_lobby(
                             let tiers: &[(&str, &[BotId])] = &[
                                 ("Adaptive", &[BotId::AdaptiveJimmy]),
                                 (
-                                    "Beginner (250–700)",
-                                    &[BotId::Martin, BotId::Elani, BotId::Jimmy, BotId::Aron],
+                                    "Beginner (400–850)",
+                                    &[
+                                        BotId::Martin,
+                                        BotId::Elani,
+                                        BotId::Wayne,
+                                        BotId::Jimmy,
+                                        BotId::Aron,
+                                        BotId::Maria,
+                                    ],
                                 ),
                                 (
-                                    "Intermediate (1000–1300)",
-                                    &[BotId::Emir, BotId::Sven, BotId::Nelson],
+                                    "Intermediate (1000–1400)",
+                                    &[
+                                        BotId::Emir,
+                                        BotId::Sven,
+                                        BotId::Wendy,
+                                        BotId::Nelson,
+                                        BotId::Jade,
+                                    ],
                                 ),
                                 (
                                     "Advanced (1500–2000)",
-                                    &[BotId::Antonio, BotId::Isabel, BotId::Wally, BotId::Li],
+                                    &[
+                                        BotId::Antonio,
+                                        BotId::Isabel,
+                                        BotId::David,
+                                        BotId::Wally,
+                                        BotId::Li,
+                                    ],
                                 ),
-                                ("Master (2200–2300)", &[BotId::Noam, BotId::Francis]),
+                                (
+                                    "Master (2200–2450)",
+                                    &[BotId::Noam, BotId::Francis, BotId::Beth],
+                                ),
                                 (
                                     "Top Players (2500–2882)",
                                     &[BotId::Danny, BotId::Hikaru, BotId::Magnus],
