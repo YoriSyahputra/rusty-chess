@@ -285,11 +285,22 @@ where
         ctx.path_hashes.clear();
         ctx.path_hashes.push(root_hash);
 
+        let need_accurate_root_scores =
+            persona.softmax_temp_cp > 0.5 && persona.elo < 2450;
+
         for mv in root_moves {
             let mut child = pos.clone();
             child.play_unchecked(&mv);
 
-            let score = -ctx.negamax(&child, depth - 1, -beta, -alpha, 1);
+            // For bots using softmax root sampling, widen the root lower bound by 260 cp
+            // so fail-low blunders return <= alpha - 260 instead of mimicking alpha!
+            let root_window_alpha = if need_accurate_root_scores {
+                (alpha - 260).max(-INF)
+            } else {
+                alpha
+            };
+
+            let score = -ctx.negamax(&child, depth - 1, -beta, -root_window_alpha, 1);
 
             if ctx.aborted && depth > 1 {
                 depth_aborted = true;
@@ -450,7 +461,9 @@ pub fn compute_multipv_lines(pos: &Chess, num_lines: usize, max_depth: u8) -> Ve
     let mut persona = BotPersona::magnus();
     persona.max_depth = max_depth.clamp(1, 5);
     persona.time_budget_ms = 140;
-    persona.softmax_temp_cp = 0.0;
+    // Enable widened root window so Top-N Multi-PV candidates get true exact scores
+    persona.elo = 2200;
+    persona.softmax_temp_cp = 1.0;
     persona.noise_cp = 0;
 
     let mut tt = TranspositionTable::new();

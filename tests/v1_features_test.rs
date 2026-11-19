@@ -5,7 +5,8 @@ use rusty_chess::{
         chess960_fen, parse_fen, scharnagl_back_rank, ChessMatchState, Color, Position,
     },
     engine::{
-        bot::BotId,
+        bot::{BotId, BotPersona},
+        review::{evaluate_move_live, MoveClassification},
         search::compute_multipv_lines,
         uci_bridge::{parse_uci_depth, parse_uci_score_cp},
     },
@@ -138,4 +139,41 @@ fn test_procedural_audio_synth_bot_mood_and_v1_config() {
     let cfg = UserConfig::default();
     assert!(!cfg.blindfold_mode);
     assert!(!cfg.use_external_uci);
+    assert!(cfg.live_analysis_enabled);
+}
+
+#[test]
+fn test_live_move_analysis_and_24_bot_roster() {
+    assert_eq!(BotId::all_lobby_personalities().len(), 24);
+    for &id in BotId::all_lobby_personalities() {
+        let p = BotPersona::by_id(id);
+        assert!(p.elo >= 400);
+        if p.elo >= 1100 {
+            assert!(p.max_depth >= 3, "Bot {} should have depth >= 3", p.name);
+        }
+    }
+
+    // Immediate blunder detection: Black's d6 pawn is moved so Bc8 attacks g4 -> White plays Qg4??
+    let pos = parse_fen("rnbqkbnr/ppp2ppp/3p4/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3").unwrap();
+    let blunder_mv = rusty_chess::domain::parse_san(&pos, "Qg4").unwrap();
+    let live_res = evaluate_move_live(&pos, &blunder_mv, 12, false);
+    assert_eq!(
+        live_res.classification,
+        MoveClassification::Blunder,
+        "Expected hanging Queen move Qg4 (captured by Bc8xg4) to be Blunder, got {:?}",
+        live_res.classification
+    );
+
+    // Immediate mate-in-1 detection should be classified as Best / Brilliant / Great
+    let mate_pos = parse_fen("6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1").unwrap();
+    let mate_mv = rusty_chess::domain::parse_san(&mate_pos, "Re8#").unwrap();
+    let mate_res = evaluate_move_live(&mate_pos, &mate_mv, 20, false);
+    assert!(
+        matches!(
+            mate_res.classification,
+            MoveClassification::Best | MoveClassification::Great | MoveClassification::Brilliant
+        ),
+        "Expected Re8# to be Best/Great/Brilliant, got {:?}",
+        mate_res.classification
+    );
 }

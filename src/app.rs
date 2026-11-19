@@ -14,7 +14,7 @@ use crate::{
             detect_dialogue_trigger, select_bot_dialogue, BotId, BotPersona, DialogueTrigger,
         },
         eval::{evaluate_for_white, material::compute_game_phase},
-        review::analyze_match_review,
+        review::{analyze_match_review, evaluate_move_live, LiveMoveEval},
         uci_bridge::{detect_system_uci_engine, test_uci_connection},
         worker::{EngineEvent, EngineWorker},
     },
@@ -81,6 +81,7 @@ pub struct RustyChessApp {
     pub search_started_at: Option<Instant>,
     pub human_turn_started_at: Instant,
     pub last_eval_cp_white: i32,
+    pub live_move_evals: Vec<LiveMoveEval>,
     pub entered_endgame_announced: bool,
     pub last_low_time_sec: Option<u64>,
 
@@ -156,6 +157,7 @@ impl RustyChessApp {
             search_started_at: None,
             human_turn_started_at: Instant::now(),
             last_eval_cp_white: 0,
+            live_move_evals: Vec::new(),
             entered_endgame_announced: false,
             last_low_time_sec: None,
             zen_mode: false,
@@ -192,6 +194,7 @@ impl RustyChessApp {
         self.eval_bar = EvalBarState::default();
         self.review_state = ReviewViewState::default();
         self.last_eval_cp_white = 0;
+        self.live_move_evals.clear();
         self.entered_endgame_announced = false;
         self.hints_used = 0;
         self.takebacks_used = 0;
@@ -220,6 +223,7 @@ impl RustyChessApp {
         self.eval_bar = EvalBarState::default();
         self.review_state = ReviewViewState::default();
         self.last_eval_cp_white = 0;
+        self.live_move_evals.clear();
         self.entered_endgame_announced = false;
         self.hints_used = 0;
         self.takebacks_used = 0;
@@ -253,6 +257,7 @@ impl RustyChessApp {
         self.eval_bar.set_eval_cp(initial_eval);
         self.review_state = ReviewViewState::default();
         self.last_eval_cp_white = initial_eval;
+        self.live_move_evals.clear();
         self.entered_endgame_announced = false;
         self.hints_used = 0;
         self.takebacks_used = 0;
@@ -283,6 +288,7 @@ impl RustyChessApp {
         self.eval_bar.set_eval_cp(initial_eval);
         self.review_state = ReviewViewState::default();
         self.last_eval_cp_white = initial_eval;
+        self.live_move_evals.clear();
         self.entered_endgame_announced = false;
         self.hints_used = 0;
         self.takebacks_used = 0;
@@ -626,32 +632,24 @@ impl RustyChessApp {
             self.config.animation_profile,
         );
 
-        // Pop-in on-board classification badge when move feedback is enabled (Feature #12)
-        if self.effective_show_move_feedback() {
-            let mover_delta_cp = match pos_before.turn() {
-                Color::White => new_eval_white - prev_eval_white,
-                Color::Black => prev_eval_white - new_eval_white,
-            };
-            let badge_cls = if mover_delta_cp <= -220 {
-                crate::engine::review::MoveClassification::Blunder
-            } else if mover_delta_cp <= -110 {
-                crate::engine::review::MoveClassification::Mistake
-            } else if mover_delta_cp <= -60 {
-                crate::engine::review::MoveClassification::Inaccuracy
-            } else if mover_delta_cp >= 180 {
-                crate::engine::review::MoveClassification::Brilliant
-            } else if mover_delta_cp >= 90 {
-                crate::engine::review::MoveClassification::Great
-            } else {
-                crate::engine::review::MoveClassification::Best
-            };
+        // Instant Real-Time Move Analysis (Blunder / Brilliant / Best / Book / Missed Win)
+        let mut effective_eval_white = new_eval_white;
+        if self.config.live_analysis_enabled {
+            let ply = self.match_state.history.len();
+            let is_book = detect_opening_from_records(&self.match_state.history)
+                .is_some_and(|op| op.matched_plies >= ply);
+            let live_eval = evaluate_move_live(&pos_before, &mv, ply, is_book);
+            effective_eval_white = live_eval.eval_after_white_cp;
             self.board_ui
                 .anim_layer
-                .set_move_classification_badge(mv.to(), badge_cls);
+                .set_move_classification_badge(mv.to(), live_eval.classification);
+            self.live_move_evals.push(live_eval);
+        } else {
+            self.board_ui.anim_layer.move_badge = None;
         }
 
-        self.eval_bar.set_eval_cp(new_eval_white);
-        self.last_eval_cp_white = new_eval_white;
+        self.eval_bar.set_eval_cp(effective_eval_white);
+        self.last_eval_cp_white = effective_eval_white;
 
         let gave_check = self.match_state.current_pos.is_check();
         let phase = compute_game_phase(self.match_state.current_pos.board());
@@ -859,6 +857,10 @@ impl RustyChessApp {
                 ui.checkbox(
                     &mut self.config.show_coordinates,
                     "Show Board Coordinates (A–H / 1–8)",
+                );
+                ui.checkbox(
+                    &mut self.config.live_analysis_enabled,
+                    "⚡ Live Real-Time Move Analysis (Instant !! / ★ / ? / ?? badges)",
                 );
                 ui.checkbox(
                     &mut self.config.show_xray_heatmap,
@@ -1367,6 +1369,10 @@ impl eframe::App for RustyChessApp {
                     };
                     let bot_mood = BotMood::from_eval(self.bot_persona.id, bot_eval_cp);
 
+                    if !self.config.live_analysis_enabled {
+                        self.board_ui.anim_layer.move_badge = None;
+                    }
+
                     egui::SidePanel::right("control_panel")
                         .exact_width(360.0)
                         .resizable(false)
@@ -1384,8 +1390,26 @@ impl eframe::App for RustyChessApp {
                                 earned_crowns,
                                 self.config.notation_style,
                                 show_feedback,
+                                self.config.live_analysis_enabled,
+                                &self.live_move_evals,
                             );
 
+                            if side_actions.show_live_best_arrow {
+                                let target = self
+                                    .live_move_evals
+                                    .iter()
+                                    .find(|e| e.ply == self.match_state.viewed_ply)
+                                    .or_else(|| self.live_move_evals.last());
+                                if let Some(le) = target {
+                                    if let Some(from) = le.best_mv.from() {
+                                        self.board_ui.hint_arrow = Some(TacticalArrow::new(
+                                            from,
+                                            le.best_mv.to(),
+                                            AnnotationColor::Green,
+                                        ));
+                                    }
+                                }
+                            }
                             if side_actions.open_bot_selector {
                                 self.active_route = ActiveRoute::PlayBots;
                             }
@@ -1400,6 +1424,8 @@ impl eframe::App for RustyChessApp {
                                     self.takebacks_used = self.takebacks_used.saturating_add(1);
                                     self.abort_engine();
                                     self.match_state.undo_move_pair();
+                                    let new_len = self.match_state.history.len();
+                                    self.live_move_evals.retain(|e| e.ply <= new_len);
                                     self.board_ui.reset();
                                     let eval_cp = evaluate_for_white(
                                         &self.match_state.current_pos,
@@ -1576,6 +1602,11 @@ impl eframe::App for RustyChessApp {
                 }
                 PaletteCommand::ToggleXRay => {
                     self.config.show_xray_heatmap = !self.config.show_xray_heatmap;
+                }
+                PaletteCommand::ToggleLiveAnalysis => {
+                    self.config.live_analysis_enabled = !self.config.live_analysis_enabled;
+                    self.profile.config = self.config.clone();
+                    self.profile.save();
                 }
                 PaletteCommand::ToggleZenMode => {
                     self.zen_mode = !self.zen_mode;

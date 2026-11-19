@@ -1,4 +1,8 @@
-use crate::{config::NotationStyle, domain::ChessMatchState};
+use crate::{
+    config::NotationStyle,
+    domain::ChessMatchState,
+    engine::review::LiveMoveEval,
+};
 use egui::{Color32, RichText, Rounding, ScrollArea, Stroke, Ui};
 
 /// Mengonversi SAN standar ke Figurine Algebraic Notation (misal `"Nf3"` -> `"♘f3"`).
@@ -36,6 +40,7 @@ pub fn render_move_table(
     max_height: f32,
     notation_style: NotationStyle,
     show_move_feedback: bool,
+    live_evals: &[LiveMoveEval],
 ) {
     let clamped_h = max_height.max(80.0);
 
@@ -125,29 +130,45 @@ pub fn render_move_table(
 
                                 // White move
                                 if let Some(w_rec) = chunk.first() {
-                                    let prev_cp = if w_rec.ply >= 2 {
-                                        match_state
-                                            .history
-                                            .get(w_rec.ply - 2)
-                                            .map(|r| r.eval_cp)
-                                            .unwrap_or(0)
+                                    let live = live_evals.iter().find(|e| e.ply == w_rec.ply);
+                                    let (badge, col_opt) = if show_move_feedback {
+                                        if let Some(le) = live {
+                                            let rgb = le.classification.rgb();
+                                            (
+                                                format!(" {}", le.classification.symbol()),
+                                                Some(Color32::from_rgb(rgb[0], rgb[1], rgb[2])),
+                                            )
+                                        } else {
+                                            let prev_cp = if w_rec.ply >= 2 {
+                                                match_state
+                                                    .history
+                                                    .get(w_rec.ply - 2)
+                                                    .map(|r| r.eval_cp)
+                                                    .unwrap_or(0)
+                                            } else {
+                                                0
+                                            };
+                                            (
+                                                inline_feedback_badge(w_rec.eval_cp - prev_cp)
+                                                    .to_string(),
+                                                None,
+                                            )
+                                        }
                                     } else {
-                                        0
-                                    };
-                                    let badge = if show_move_feedback {
-                                        inline_feedback_badge(w_rec.eval_cp - prev_cp)
-                                    } else {
-                                        ""
+                                        (String::new(), None)
                                     };
                                     let display_san = format!(
                                         "{}{badge}",
                                         format_san_with_style(&w_rec.san, notation_style, true)
                                     );
                                     let is_selected = viewed_ply == w_rec.ply;
-                                    let btn = egui::SelectableLabel::new(
-                                        is_selected,
-                                        RichText::new(display_san).monospace().size(12.5),
-                                    );
+                                    let mut rt = RichText::new(display_san).monospace().size(12.5);
+                                    if let Some(c) = col_opt {
+                                        if !is_selected {
+                                            rt = rt.color(c);
+                                        }
+                                    }
+                                    let btn = egui::SelectableLabel::new(is_selected, rt);
                                     if ui.add_sized([132.0, 20.0], btn).clicked() {
                                         clicked_ply = Some(w_rec.ply);
                                     }
@@ -155,25 +176,41 @@ pub fn render_move_table(
 
                                 // Black move
                                 if let Some(b_rec) = chunk.get(1) {
-                                    let prev_cp = match_state
-                                        .history
-                                        .get(b_rec.ply - 2)
-                                        .map(|r| r.eval_cp)
-                                        .unwrap_or(0);
-                                    let badge = if show_move_feedback {
-                                        inline_feedback_badge(prev_cp - b_rec.eval_cp)
+                                    let live = live_evals.iter().find(|e| e.ply == b_rec.ply);
+                                    let (badge, col_opt) = if show_move_feedback {
+                                        if let Some(le) = live {
+                                            let rgb = le.classification.rgb();
+                                            (
+                                                format!(" {}", le.classification.symbol()),
+                                                Some(Color32::from_rgb(rgb[0], rgb[1], rgb[2])),
+                                            )
+                                        } else {
+                                            let prev_cp = match_state
+                                                .history
+                                                .get(b_rec.ply - 2)
+                                                .map(|r| r.eval_cp)
+                                                .unwrap_or(0);
+                                            (
+                                                inline_feedback_badge(prev_cp - b_rec.eval_cp)
+                                                    .to_string(),
+                                                None,
+                                            )
+                                        }
                                     } else {
-                                        ""
+                                        (String::new(), None)
                                     };
                                     let display_san = format!(
                                         "{}{badge}",
                                         format_san_with_style(&b_rec.san, notation_style, false)
                                     );
                                     let is_selected = viewed_ply == b_rec.ply;
-                                    let btn = egui::SelectableLabel::new(
-                                        is_selected,
-                                        RichText::new(display_san).monospace().size(12.5),
-                                    );
+                                    let mut rt = RichText::new(display_san).monospace().size(12.5);
+                                    if let Some(c) = col_opt {
+                                        if !is_selected {
+                                            rt = rt.color(c);
+                                        }
+                                    }
+                                    let btn = egui::SelectableLabel::new(is_selected, rt);
                                     if ui.add_sized([132.0, 20.0], btn).clicked() {
                                         clicked_ply = Some(b_rec.ply);
                                     }

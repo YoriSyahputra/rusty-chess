@@ -13,6 +13,7 @@ pub enum PaletteCommand {
     SetBoardTheme(BoardTheme),
     SetPieceSet(PieceSetStyle),
     ToggleXRay,
+    ToggleLiveAnalysis,
     ToggleZenMode,
     ToggleBlindfold,
     StartChess960,
@@ -276,6 +277,11 @@ fn build_palette_items() -> Vec<PaletteItem> {
             label: "🎯 Open Coordinate Speed Vision Trainer".into(),
             category: "Training",
             cmd: PaletteCommand::Navigate(ActiveRoute::Vision),
+        },
+        PaletteItem {
+            label: "⚡ Toggle Live Real-Time Move Analysis (!! / ??)".into(),
+            category: "Analytics",
+            cmd: PaletteCommand::ToggleLiveAnalysis,
         },
         PaletteItem {
             label: "👁 Toggle X-Ray Square Control Heatmap (X)".into(),

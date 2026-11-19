@@ -13,8 +13,9 @@ pub use bot::{
 pub use coach::{explain_move, CoachExplanation};
 pub use eval::{evaluate, evaluate_for_white, EvalWeights};
 pub use review::{
-    accuracy_from_mean_loss_pct, analyze_match_review, win_probability_from_cp, GameReviewReport,
-    MoveClassification, PlyReviewEntry,
+    accuracy_from_mean_loss_pct, analyze_match_review, evaluate_move_live,
+    win_probability_from_cp, BreakdownRow, GameReviewReport, LiveMoveEval, MoveClassification,
+    PlyReviewEntry,
 };
 pub use search::{
     compute_multipv_lines, quiescence_search, search_best_move, MultiPvLine, SearchHeuristics,

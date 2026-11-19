@@ -6,13 +6,13 @@ pub mod move_table;
 use crate::{
     config::{AssistanceMode, NotationStyle},
     domain::{detect_opening_from_records, ChessMatchState},
-    engine::bot::BotPersona,
+    engine::{bot::BotPersona, review::LiveMoveEval},
     ui::piece_renderer::BotMood,
 };
 use bot_card::render_bot_card;
 pub use bot_selector::{show_bot_selector_modal, MatchSetupSelection};
 pub use captured_tray::render_player_strip;
-use egui::{Color32, RichText, Ui};
+use egui::{Align2, Color32, FontId, RichText, Rounding, Sense, Stroke, Ui, Vec2};
 use move_table::render_move_table;
 
 #[derive(Debug, Default)]
@@ -23,6 +23,7 @@ pub struct SidePanelActions {
     pub resign_game: bool,
     pub flip_board: bool,
     pub open_review: bool,
+    pub show_live_best_arrow: bool,
 }
 
 /// Merender Bounded Right Control Panel (`360 px` Fixed Width) sesuai NEW_DESIGN.md Section 5.2:
@@ -43,6 +44,8 @@ pub fn render_side_panel(
     earned_crowns: u8,
     notation_style: NotationStyle,
     show_move_feedback: bool,
+    live_analysis_enabled: bool,
+    live_evals: &[LiveMoveEval],
 ) -> SidePanelActions {
     let mut actions = SidePanelActions::default();
 
@@ -93,6 +96,67 @@ pub fn render_side_panel(
         0.0
     };
 
+    // Live Instant Move Analysis Coach Card (Chess.com-style instant blunder / brilliant popup!)
+    if live_analysis_enabled {
+        let active_eval = live_evals
+            .iter()
+            .find(|e| e.ply == match_state.viewed_ply)
+            .or_else(|| live_evals.last());
+        if let Some(le) = active_eval {
+            let rgb = le.classification.rgb();
+            let badge_col = Color32::from_rgb(rgb[0], rgb[1], rgb[2]);
+            egui::Frame::none()
+                .fill(Color32::from_rgb(0x2B, 0x29, 0x26))
+                .stroke(Stroke::new(1.2_f32, badge_col.gamma_multiply(0.85)))
+                .rounding(Rounding::same(8.0_f32))
+                .inner_margin(egui::Margin::symmetric(8.0, 5.0))
+                .show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        let (c_rect, _) =
+                            ui.allocate_exact_size(Vec2::splat(22.0), Sense::hover());
+                        ui.painter()
+                            .circle_filled(c_rect.center(), 10.5, badge_col);
+                        ui.painter().text(
+                            c_rect.center(),
+                            Align2::CENTER_CENTER,
+                            le.classification.symbol(),
+                            FontId::proportional(11.0),
+                            Color32::WHITE,
+                        );
+                        ui.vertical(|ui| {
+                            ui.label(
+                                RichText::new(&le.coach_note)
+                                    .strong()
+                                    .size(11.5)
+                                    .color(Color32::from_rgb(0xF2, 0xF0, 0xEC)),
+                            );
+                        });
+                        if le.classification.is_mistake_or_worse() {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .small_button(
+                                            RichText::new("Best")
+                                                .strong()
+                                                .size(10.5)
+                                                .color(Color32::from_rgb(0x81, 0xB6, 0x4C)),
+                                        )
+                                        .on_hover_text(format!("Show best move ({})", le.best_san))
+                                        .clicked()
+                                    {
+                                        actions.show_live_best_arrow = true;
+                                    }
+                                },
+                            );
+                        }
+                    });
+                });
+            ui.add_space(4.0);
+        }
+    }
+
     // Reserve exact height for Pinned Footer so ScrollArea never overflows vertically!
     let pinned_footer_reserve = if match_state.outcome.is_game_over() {
         134.0
@@ -108,7 +172,8 @@ pub fn render_side_panel(
         match_state,
         remaining_h,
         notation_style,
-        show_move_feedback,
+        show_move_feedback || live_analysis_enabled,
+        live_evals,
     );
 
     ui.add_space(6.0);

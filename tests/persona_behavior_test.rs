@@ -19,7 +19,7 @@ fn test_all_six_personas_parameters_and_contrast() {
 
     // Also verify all 18 v0.2.0 Lobby Personalities + Engine Custom
     let lobby = BotPersona::lobby_roster();
-    assert_eq!(lobby.len(), 18, "Lobby must contain all 18 personality bots");
+    assert_eq!(lobby.len(), 24, "Lobby must contain all 24 personality bots");
 
     let custom_eng = BotPersona::engine_custom(2250);
     assert_eq!(custom_eng.elo, 2250);

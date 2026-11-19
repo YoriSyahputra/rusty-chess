@@ -18,11 +18,20 @@ use crate::{
         theme::UiTokens,
     },
 };
-use egui::{Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Sense, Stroke, Ui, Vec2};
+use egui::{Align2, Color32, FontId, Pos2, Rect, RichText, Rounding, ScrollArea, Sense, Stroke, Ui, Vec2};
 use shakmaty::Position;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ReviewTab {
+    #[default]
+    Report,
+    Moves,
+    Sandbox,
+}
 
 #[derive(Default)]
 pub struct ReviewViewState {
+    pub active_tab: ReviewTab,
     pub report: Option<GameReviewReport>,
     pub analyzed_plies_count: usize,
     pub selected_ply: usize,
@@ -65,6 +74,7 @@ impl ReviewViewState {
             self.cached_multipv_fen.clear();
             self.cached_multipv.clear();
             self.sandbox_active = true;
+            self.active_tab = ReviewTab::Sandbox;
             self.retry_mode_active = false;
         }
     }
@@ -123,23 +133,32 @@ pub fn render_review_page(
         .show_inside(ui, |ui| {
             ui.add_space(6.0);
 
-            // Top Mode Switcher: Post-Game Review vs Free Multi-PV Analysis Sandbox (Feature #23)
+            // Top 3-Tab Switcher: Chess.com Report Breakdown vs Move-by-Move Coach vs Multi-PV Sandbox
             ui.horizontal(|ui| {
                 if ui
                     .selectable_label(
-                        !review_state.sandbox_active,
-                        RichText::new("📊 Game Review").strong().size(12.5),
+                        review_state.active_tab == ReviewTab::Report,
+                        RichText::new("📊 Report").strong().size(12.5),
                     )
                     .clicked()
                 {
+                    review_state.active_tab = ReviewTab::Report;
                     review_state.sandbox_active = false;
                 }
                 if ui
                     .selectable_label(
-                        review_state.sandbox_active,
-                        RichText::new("🔬 Multi-PV Analysis Sandbox")
-                            .strong()
-                            .size(12.5),
+                        review_state.active_tab == ReviewTab::Moves,
+                        RichText::new("☰ Moves & Coach").strong().size(12.5),
+                    )
+                    .clicked()
+                {
+                    review_state.active_tab = ReviewTab::Moves;
+                    review_state.sandbox_active = false;
+                }
+                if ui
+                    .selectable_label(
+                        review_state.active_tab == ReviewTab::Sandbox,
+                        RichText::new("◈ Multi-PV Sandbox").strong().size(12.5),
                     )
                     .clicked()
                 {
@@ -149,7 +168,190 @@ pub fn render_review_page(
 
             ui.add_space(6.0);
 
-            if review_state.sandbox_active {
+            // Chess.com 1:1 Classification Breakdown Report Tab (Screenshot 3)
+            if review_state.active_tab == ReviewTab::Report {
+                ScrollArea::vertical()
+                    .id_salt("chesscom_report_breakdown_scroll")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        // Accuracy Header Card
+                        egui::Frame::none()
+                            .fill(tokens.bg_surface)
+                            .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
+                            .rounding(Rounding::same(10.0_f32))
+                            .inner_margin(egui::Margin::same(12.0))
+                            .show(ui, |ui| {
+                                ui.set_min_width(ui.available_width());
+                                ui.columns(2, |cols| {
+                                    cols[0].vertical_centered(|ui| {
+                                        ui.label(
+                                            RichText::new("⬜ White")
+                                                .strong()
+                                                .size(12.5)
+                                                .color(tokens.text_secondary),
+                                        );
+                                        ui.label(
+                                            RichText::new(format!("{:.1}%", report.white_accuracy))
+                                                .strong()
+                                                .size(22.0)
+                                                .color(tokens.accent_primary),
+                                        );
+                                        ui.label(
+                                            RichText::new(format!("Est. ELO {}", report.white_est_elo))
+                                                .monospace()
+                                                .size(11.0)
+                                                .color(tokens.accent_gold),
+                                        );
+                                    });
+                                    cols[1].vertical_centered(|ui| {
+                                        ui.label(
+                                            RichText::new(format!("⬛ {bot_name}"))
+                                                .strong()
+                                                .size(12.5)
+                                                .color(tokens.text_secondary),
+                                        );
+                                        ui.label(
+                                            RichText::new(format!("{:.1}%", report.black_accuracy))
+                                                .strong()
+                                                .size(22.0)
+                                                .color(tokens.accent_info),
+                                        );
+                                        ui.label(
+                                            RichText::new(format!("Est. ELO {}", report.black_est_elo))
+                                                .monospace()
+                                                .size(11.0)
+                                                .color(tokens.accent_gold),
+                                        );
+                                    });
+                                });
+                            });
+
+                        ui.add_space(10.0);
+
+                        // Exact 9-Row Chess.com Classification Breakdown Table
+                        egui::Frame::none()
+                            .fill(tokens.bg_surface)
+                            .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
+                            .rounding(Rounding::same(10.0_f32))
+                            .inner_margin(egui::Margin::symmetric(16.0, 12.0))
+                            .show(ui, |ui| {
+                                ui.set_min_width(ui.available_width());
+                                let rows = report.chesscom_breakdown();
+                                for row in rows {
+                                    let rgb = row.classification.rgb();
+                                    let col = Color32::from_rgb(rgb[0], rgb[1], rgb[2]);
+
+                                    ui.horizontal(|ui| {
+                                        let total_w = ui.available_width();
+                                        // Left: White count
+                                        ui.allocate_ui_with_layout(
+                                            Vec2::new(42.0, 26.0),
+                                            egui::Layout::centered_and_justified(
+                                                egui::Direction::LeftToRight,
+                                            ),
+                                            |ui| {
+                                                ui.label(
+                                                    RichText::new(format!("{}", row.white_count))
+                                                        .strong()
+                                                        .size(15.0)
+                                                        .color(col),
+                                                );
+                                            },
+                                        );
+
+                                        // Center: Circular Colored Badge + Label
+                                        let mid_w = (total_w - 104.0).max(140.0);
+                                        ui.allocate_ui_with_layout(
+                                            Vec2::new(mid_w, 26.0),
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| {
+                                                ui.add_space(10.0);
+                                                let (b_rect, _) = ui.allocate_exact_size(
+                                                    Vec2::splat(22.0),
+                                                    Sense::hover(),
+                                                );
+                                                ui.painter().circle_filled(
+                                                    b_rect.center(),
+                                                    10.5,
+                                                    col,
+                                                );
+                                                ui.painter().text(
+                                                    b_rect.center(),
+                                                    Align2::CENTER_CENTER,
+                                                    row.classification.symbol(),
+                                                    FontId::proportional(11.5),
+                                                    Color32::WHITE,
+                                                );
+                                                ui.add_space(8.0);
+                                                ui.label(
+                                                    RichText::new(row.label)
+                                                        .size(14.0)
+                                                        .color(tokens.text_primary),
+                                                );
+                                            },
+                                        );
+
+                                        // Right: Black count
+                                        ui.allocate_ui_with_layout(
+                                            Vec2::new(42.0, 26.0),
+                                            egui::Layout::centered_and_justified(
+                                                egui::Direction::LeftToRight,
+                                            ),
+                                            |ui| {
+                                                ui.label(
+                                                    RichText::new(format!("{}", row.black_count))
+                                                        .strong()
+                                                        .size(15.0)
+                                                        .color(col),
+                                                );
+                                            },
+                                        );
+                                    });
+                                    ui.add_space(4.0);
+                                }
+
+                                ui.add_space(10.0);
+                                ui.separator();
+                                ui.add_space(8.0);
+
+                                // Bottom Game Mood Verdict (e.g. ROUGH / CLEAN / DOMINANT + Coach summary)
+                                let human_won = match_state
+                                    .outcome
+                                    .winner()
+                                    .map(|w| w == match_state.human_color);
+                                let (mood_label, summary_txt) = report.game_mood_verdict(human_won);
+
+                                ui.vertical_centered(|ui| {
+                                    ui.label(
+                                        RichText::new(format!("▲  {mood_label}"))
+                                            .strong()
+                                            .size(15.0)
+                                            .color(tokens.text_secondary),
+                                    );
+                                    ui.add_space(4.0);
+                                    ui.label(
+                                        RichText::new(summary_txt)
+                                            .size(13.0)
+                                            .color(tokens.text_secondary),
+                                    );
+                                });
+                            });
+
+                        ui.add_space(10.0);
+                        let full_w = ui.available_width();
+                        if crate::ui::theme::chess_cta_button(
+                            ui,
+                            Vec2::new(full_w, 38.0),
+                            "▶ Inspect Move-by-Move Coach",
+                            tokens.accent_primary,
+                        ) {
+                            review_state.active_tab = ReviewTab::Moves;
+                        }
+                    });
+                return;
+            }
+
+            if review_state.active_tab == ReviewTab::Sandbox {
                 if review_state.sandbox_state.is_none() {
                     review_state.enter_sandbox(match_state);
                 }
