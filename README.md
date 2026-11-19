@@ -158,32 +158,9 @@ Earn up to **72 Crowns (`3★` per bot)** across **4 Assistance Modes**:
 
 ## 🏗 Performance & Architecture
 
-```mermaid
-flowchart LR
-    subgraph UI["eframe / egui 0.29 Reactive UI Thread (0% Idle CPU)"]
-        Sidebar["Left Nav Sidebar"]
-        Board["8x8 Vector Board + Anim Layer"]
-        Panel["Bounded Right Panel & Live Coach"]
-        Pages["10 Routes: Home, Bots, Puzzles, Review, DNA, Arena, 960, Vision"]
-    end
-
-    subgraph Domain["Pure Domain Layer (shakmaty 0.27)"]
-        State["ChessMatchState + Chess960"]
-        ECO["130+ Embedded ECO Opening Book"]
-        Audio["Procedural 22kHz PCM WAV Synth"]
-    end
-
-    subgraph Engine["Background Engine Worker + Review"]
-        Search["Iterative Deepening Negamax + PVS + Quiescence"]
-        TT["Fixed 8 MB Zobrist Transposition Table"]
-        Eval["Tapered PeSTO Eval + 24 Bot Personas"]
-        UCI["Optional External Stockfish UCI Bridge"]
-    end
-
-    UI <-->|"mpsc Channels + AtomicBool Abort"| Engine
-    UI --> Domain
-    Engine --> Domain
-```
+<div align="center">
+  <img src="assets/architecture.svg" alt="Rusty Chess v1.0.0 Multi-Thread Reactive Architecture" width="100%"/>
+</div>
 
 | Metric | Target Constraint | Measured `v1.0.0` Result |
 | :--- | :---: | :---: |
