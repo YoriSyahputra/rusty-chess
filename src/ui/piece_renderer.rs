@@ -2,7 +2,7 @@ use crate::{config::PieceSetStyle, engine::bot::BotId};
 use egui::{Color32, Painter, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use shakmaty::{Color, Role};
 
-/// Menggambar bidak catur vektor prosedural dengan gaya klasik default (`ClassicStaunton`).
+/// Menggambar bidak catur vektor prosedural dengan gaya default Chess.com Neo.
 pub fn draw_chess_piece(
     painter: &Painter,
     center: Pos2,
@@ -18,12 +18,12 @@ pub fn draw_chess_piece(
         color,
         role,
         is_dragged,
-        PieceSetStyle::ClassicStaunton,
+        PieceSetStyle::ChessComNeo,
     );
 }
 
-/// Menggambar bidak catur vektor prosedural dalam 5 gaya pilihan (Feature #6):
-/// `ClassicStaunton`, `ChessComNeo`, `MinimalistAlpha`, `Pixel8Bit`, `NeonWireframe`.
+/// Menggambar bidak catur vektor prosedural dalam 5 gaya pilihan:
+/// `ChessComNeo` (default autentik Chess.com), `ClassicStaunton`, `MinimalistAlpha`, `Pixel8Bit`, `NeonWireframe`.
 pub fn draw_chess_piece_styled(
     painter: &Painter,
     center: Pos2,
@@ -34,7 +34,7 @@ pub fn draw_chess_piece_styled(
     style: PieceSetStyle,
 ) {
     let scale = if is_dragged {
-        square_size * 1.15
+        square_size * 1.12
     } else {
         square_size
     };
@@ -44,110 +44,176 @@ pub fn draw_chess_piece_styled(
         return;
     }
 
-    let (fill_color, inner_accent, outline_color, stroke_mult) = match (style, color) {
+    let (fill_color, shade_color, inner_accent, outline_color, stroke_mult) = match (style, color) {
         (PieceSetStyle::NeonWireframe, Color::White) => (
             Color32::from_rgba_unmultiplied(0, 235, 255, 36),
-            Color32::from_rgb(120, 250, 255),
+            Color32::from_rgba_unmultiplied(0, 180, 220, 48),
+            Color32::from_rgb(130, 250, 255),
             Color32::from_rgb(0, 235, 255),
             1.15,
         ),
         (PieceSetStyle::NeonWireframe, Color::Black) => (
             Color32::from_rgba_unmultiplied(255, 55, 185, 36),
-            Color32::from_rgb(255, 145, 225),
+            Color32::from_rgba_unmultiplied(190, 30, 140, 48),
+            Color32::from_rgb(255, 150, 225),
             Color32::from_rgb(255, 55, 185),
             1.15,
         ),
         (PieceSetStyle::ChessComNeo, Color::White) => (
-            Color32::from_rgb(255, 255, 255),
-            Color32::from_rgb(232, 232, 228),
-            Color32::from_rgb(45, 44, 42),
-            1.20,
+            Color32::from_rgb(0xFF, 0xFF, 0xFF),
+            Color32::from_rgb(0xD8, 0xD6, 0xD1),
+            Color32::from_rgb(0xC5, 0xC2, 0xBC),
+            Color32::from_rgb(0x3B, 0x39, 0x36),
+            0.92,
         ),
         (PieceSetStyle::ChessComNeo, Color::Black) => (
-            Color32::from_rgb(56, 54, 51),
-            Color32::from_rgb(108, 105, 100),
-            Color32::from_rgb(22, 21, 20),
-            1.20,
+            Color32::from_rgb(0x55, 0x52, 0x4F),
+            Color32::from_rgb(0x3E, 0x3C, 0x39),
+            Color32::from_rgb(0x98, 0x94, 0x8F),
+            Color32::from_rgb(0x23, 0x21, 0x1F),
+            0.92,
         ),
         (PieceSetStyle::MinimalistAlpha, Color::White) => (
-            Color32::from_rgb(244, 242, 236),
+            Color32::from_rgb(0xF6, 0xF5, 0xF0),
+            Color32::from_rgb(0xE6, 0xE4, 0xDD),
             Color32::TRANSPARENT,
-            Color32::from_rgb(52, 50, 48),
-            0.85,
+            Color32::from_rgb(0x38, 0x36, 0x34),
+            0.78,
         ),
         (PieceSetStyle::MinimalistAlpha, Color::Black) => (
-            Color32::from_rgb(34, 36, 40),
+            Color32::from_rgb(0x2D, 0x2E, 0x32),
+            Color32::from_rgb(0x21, 0x22, 0x26),
             Color32::TRANSPARENT,
-            Color32::from_rgb(218, 216, 210),
-            0.75,
+            Color32::from_rgb(0xDF, 0xDD, 0xD7),
+            0.68,
         ),
         (_, Color::White) => (
-            Color32::from_rgb(248, 247, 242),
-            Color32::from_rgb(218, 214, 202),
-            Color32::from_rgb(32, 34, 38),
-            1.0,
+            Color32::from_rgb(0xFA, 0xF7, 0xEE),
+            Color32::from_rgb(0xDF, 0xD8, 0xC6),
+            Color32::from_rgb(0xB8, 0xB0, 0x9E),
+            Color32::from_rgb(0x2A, 0x28, 0x26),
+            1.02,
         ),
         (_, Color::Black) => (
-            Color32::from_rgb(40, 43, 50),
-            Color32::from_rgb(95, 102, 118),
-            Color32::from_rgb(14, 15, 18),
-            1.0,
+            Color32::from_rgb(0x3A, 0x3C, 0x42),
+            Color32::from_rgb(0x28, 0x2A, 0x2F),
+            Color32::from_rgb(0x88, 0x8D, 0x99),
+            Color32::from_rgb(0x16, 0x17, 0x1A),
+            1.02,
         ),
     };
 
-    let stroke_width = (scale * 0.032 * stroke_mult).clamp(1.3, 3.2);
+    let stroke_width = (scale * 0.026 * stroke_mult).clamp(1.0, 2.35);
     let outline = Stroke::new(stroke_width, outline_color);
     let accent_stroke = if inner_accent == Color32::TRANSPARENT {
         Stroke::NONE
     } else {
-        Stroke::new((stroke_width * 0.85).max(1.1), inner_accent)
+        Stroke::new((stroke_width * 0.72).max(0.95), inner_accent)
     };
 
-    // Drop shadow (neon glow halo for NeonWireframe)
-    let shadow_offset = if is_dragged {
-        Vec2::new(scale * 0.04, scale * 0.07)
-    } else {
-        Vec2::new(scale * 0.018, scale * 0.032)
-    };
-    let shadow_alpha = if is_dragged { 95 } else { 65 };
-    let shadow_color = if style == PieceSetStyle::NeonWireframe {
-        outline_color.gamma_multiply(0.28)
-    } else {
-        Color32::from_rgba_unmultiplied(0, 0, 0, shadow_alpha)
-    };
-
-    painter.circle_filled(
-        Pos2::new(
-            center.x + shadow_offset.x,
-            center.y + scale * 0.30 + shadow_offset.y,
-        ),
-        scale * 0.31,
-        shadow_color,
-    );
+    // Soft feathered elliptical ground shadow (replaces stiff solid round puck)
+    draw_soft_piece_shadow(painter, center, scale, is_dragged, style, outline_color);
 
     match role {
-        Role::Pawn => draw_pawn(painter, center, scale, fill_color, outline, accent_stroke),
-        Role::Rook => draw_rook(painter, center, scale, fill_color, outline, accent_stroke),
+        Role::Pawn => draw_pawn(painter, center, scale, fill_color, shade_color, outline, accent_stroke),
+        Role::Rook => draw_rook(painter, center, scale, fill_color, shade_color, outline, accent_stroke),
         Role::Knight => draw_knight(
             painter,
             center,
             scale,
             fill_color,
+            shade_color,
             inner_accent,
             outline,
             accent_stroke,
         ),
-        Role::Bishop => draw_bishop(painter, center, scale, fill_color, outline, accent_stroke),
+        Role::Bishop => draw_bishop(
+            painter,
+            center,
+            scale,
+            fill_color,
+            shade_color,
+            inner_accent,
+            outline,
+            accent_stroke,
+        ),
         Role::Queen => draw_queen(
             painter,
             center,
             scale,
             fill_color,
+            shade_color,
             inner_accent,
             outline,
             accent_stroke,
         ),
-        Role::King => draw_king(painter, center, scale, fill_color, outline, accent_stroke),
+        Role::King => draw_king(
+            painter,
+            center,
+            scale,
+            fill_color,
+            shade_color,
+            outline,
+            accent_stroke,
+        ),
+    }
+}
+
+/// Menggambar bayangan kontak elips bertingkat yang lembut di bawah alas bidak.
+fn draw_soft_piece_shadow(
+    painter: &Painter,
+    center: Pos2,
+    scale: f32,
+    is_dragged: bool,
+    style: PieceSetStyle,
+    neon_color: Color32,
+) {
+    let base_y = if is_dragged {
+        center.y + scale * 0.43
+    } else {
+        center.y + scale * 0.375
+    };
+    let offset_x = if is_dragged { scale * 0.03 } else { 0.0 };
+
+    if style == PieceSetStyle::NeonWireframe {
+        let glow_rect = Rect::from_center_size(
+            Pos2::new(center.x + offset_x, base_y),
+            Vec2::new(scale * 0.62, scale * 0.11),
+        );
+        painter.rect_filled(
+            glow_rect,
+            Rounding::same(scale * 0.055),
+            neon_color.gamma_multiply(0.22),
+        );
+        return;
+    }
+
+    // 3 concentric soft feathered horizontal ellipses (outermost widest & faintest)
+    let layers: [(f32, f32, u8); 3] = if is_dragged {
+        [
+            (0.72, 0.15, 16),
+            (0.56, 0.11, 24),
+            (0.40, 0.075, 30),
+        ]
+    } else {
+        [
+            (0.64, 0.11, 14),
+            (0.54, 0.08, 22),
+            (0.42, 0.055, 28),
+        ]
+    };
+
+    for (wf, hf, alpha) in layers {
+        let h = scale * hf;
+        let rect = Rect::from_center_size(
+            Pos2::new(center.x + offset_x, base_y),
+            Vec2::new(scale * wf, h),
+        );
+        painter.rect_filled(
+            rect,
+            Rounding::same(h * 0.5),
+            Color32::from_rgba_unmultiplied(0, 0, 0, alpha),
+        );
     }
 }
 
@@ -270,35 +336,48 @@ fn draw_pixel_8bit_piece(
     }
 }
 
-fn draw_basepedestal(
+fn draw_neo_base(
     painter: &Painter,
-    center: Pos2,
-    scale: f32,
+    c: Pos2,
+    s: f32,
     width_factor: f32,
     fill: Color32,
+    shade: Color32,
     outline: Stroke,
     accent: Stroke,
 ) {
-    let w = scale * width_factor;
+    let w = s * width_factor;
+    // Lower sleek pill base (Chess.com Neo signature flat rounded pedestal)
     let base_rect = Rect::from_center_size(
-        Pos2::new(center.x, center.y + scale * 0.33),
-        Vec2::new(w, scale * 0.09),
+        Pos2::new(c.x, c.y + s * 0.315),
+        Vec2::new(w, s * 0.115),
     );
-    painter.rect(base_rect, Rounding::same(scale * 0.03), fill, outline);
+    painter.rect(base_rect, Rounding::same(s * 0.055), fill, outline);
 
+    // Subtle right-half 3D shading on base
+    let shade_rect = Rect::from_min_max(
+        Pos2::new(c.x + w * 0.06, base_rect.min.y + outline.width * 0.6),
+        Pos2::new(base_rect.max.x - outline.width * 0.6, base_rect.max.y - outline.width * 0.6),
+    );
+    painter.rect_filled(shade_rect, Rounding::same(s * 0.04), shade);
+
+    // Clean upper collar step
     let step_rect = Rect::from_center_size(
-        Pos2::new(center.x, center.y + scale * 0.26),
-        Vec2::new(w * 0.82, scale * 0.065),
+        Pos2::new(c.x, c.y + s * 0.245),
+        Vec2::new(w * 0.78, s * 0.058),
     );
-    painter.rect(step_rect, Rounding::same(scale * 0.025), fill, outline);
+    painter.rect(step_rect, Rounding::same(s * 0.028), fill, outline);
 
-    painter.line_segment(
-        [
-            Pos2::new(center.x - w * 0.34, center.y + scale * 0.33),
-            Pos2::new(center.x + w * 0.34, center.y + scale * 0.33),
-        ],
-        accent,
-    );
+    // Subtle top specular highlight line
+    if accent != Stroke::NONE {
+        painter.line_segment(
+            [
+                Pos2::new(c.x - w * 0.32, c.y + s * 0.315),
+                Pos2::new(c.x + w * 0.04, c.y + s * 0.315),
+            ],
+            accent,
+        );
+    }
 }
 
 fn draw_pawn(
@@ -306,35 +385,55 @@ fn draw_pawn(
     c: Pos2,
     s: f32,
     fill: Color32,
+    shade: Color32,
     outline: Stroke,
     accent: Stroke,
 ) {
-    // Stem trapezoid
-    let stem = vec![
-        Pos2::new(c.x - s * 0.11, c.y - s * 0.06),
-        Pos2::new(c.x + s * 0.11, c.y - s * 0.06),
-        Pos2::new(c.x + s * 0.21, c.y + s * 0.24),
-        Pos2::new(c.x - s * 0.21, c.y + s * 0.24),
+    // Sleek flared Chess.com Neo pawn body
+    let body = vec![
+        Pos2::new(c.x - s * 0.095, c.y - s * 0.055),
+        Pos2::new(c.x + s * 0.095, c.y - s * 0.055),
+        Pos2::new(c.x + s * 0.145, c.y + s * 0.08),
+        Pos2::new(c.x + s * 0.225, c.y + s * 0.245),
+        Pos2::new(c.x - s * 0.225, c.y + s * 0.245),
+        Pos2::new(c.x - s * 0.145, c.y + s * 0.08),
     ];
-    painter.add(Shape::convex_polygon(stem, fill, outline));
+    painter.add(Shape::convex_polygon(body, fill, outline));
 
-    // Collar ring
+    // Right-side shading slice on body
+    let body_shade = vec![
+        Pos2::new(c.x + s * 0.015, c.y - s * 0.04),
+        Pos2::new(c.x + s * 0.085, c.y - s * 0.04),
+        Pos2::new(c.x + s * 0.205, c.y + s * 0.23),
+        Pos2::new(c.x + s * 0.045, c.y + s * 0.23),
+    ];
+    painter.add(Shape::convex_polygon(body_shade, shade, Stroke::NONE));
+
+    // Smooth rounded collar
     let collar = Rect::from_center_size(
-        Pos2::new(c.x, c.y - s * 0.07),
-        Vec2::new(s * 0.28, s * 0.055),
+        Pos2::new(c.x, c.y - s * 0.065),
+        Vec2::new(s * 0.27, s * 0.058),
     );
-    painter.rect(collar, Rounding::same(s * 0.025), fill, outline);
+    painter.rect(collar, Rounding::same(s * 0.029), fill, outline);
 
-    // Spherical head
-    let head_center = Pos2::new(c.x, c.y - s * 0.21);
-    painter.circle(head_center, s * 0.145, fill, outline);
-    painter.circle_stroke(
-        Pos2::new(head_center.x - s * 0.03, head_center.y - s * 0.03),
-        s * 0.05,
-        accent,
+    // Classic large friendly spherical Neo Pawn head
+    let head_center = Pos2::new(c.x, c.y - s * 0.205);
+    let head_r = s * 0.148;
+    painter.circle(head_center, head_r, fill, outline);
+    // Soft crescent shade on lower-right of sphere
+    painter.circle_filled(
+        Pos2::new(head_center.x + head_r * 0.24, head_center.y + head_r * 0.14),
+        head_r * 0.62,
+        shade,
     );
+    painter.circle_filled(
+        Pos2::new(head_center.x - head_r * 0.10, head_center.y - head_r * 0.08),
+        head_r * 0.68,
+        fill,
+    );
+    painter.circle_stroke(head_center, head_r, outline);
 
-    draw_basepedestal(painter, c, s, 0.56, fill, outline, accent);
+    draw_neo_base(painter, c, s, 0.58, fill, shade, outline, accent);
 }
 
 fn draw_rook(
@@ -342,51 +441,62 @@ fn draw_rook(
     c: Pos2,
     s: f32,
     fill: Color32,
+    shade: Color32,
     outline: Stroke,
     accent: Stroke,
 ) {
-    // Tower body
-    let body = vec![
-        Pos2::new(c.x - s * 0.17, c.y - s * 0.16),
-        Pos2::new(c.x + s * 0.17, c.y - s * 0.16),
-        Pos2::new(c.x + s * 0.23, c.y + s * 0.24),
-        Pos2::new(c.x - s * 0.23, c.y + s * 0.24),
+    // Sleek tapered fortress tower
+    let tower = vec![
+        Pos2::new(c.x - s * 0.165, c.y - s * 0.155),
+        Pos2::new(c.x + s * 0.165, c.y - s * 0.155),
+        Pos2::new(c.x + s * 0.22, c.y + s * 0.245),
+        Pos2::new(c.x - s * 0.22, c.y + s * 0.245),
     ];
-    painter.add(Shape::convex_polygon(body, fill, outline));
+    painter.add(Shape::convex_polygon(tower, fill, outline));
 
-    // Crown beam
-    let crown_beam = Rect::from_center_size(
-        Pos2::new(c.x, c.y - s * 0.20),
-        Vec2::new(s * 0.44, s * 0.09),
+    // Right-side architectural shadow
+    let tower_shade = vec![
+        Pos2::new(c.x + s * 0.03, c.y - s * 0.14),
+        Pos2::new(c.x + s * 0.155, c.y - s * 0.14),
+        Pos2::new(c.x + s * 0.205, c.y + s * 0.23),
+        Pos2::new(c.x + s * 0.055, c.y + s * 0.23),
+    ];
+    painter.add(Shape::convex_polygon(tower_shade, shade, Stroke::NONE));
+
+    // Upper turret parapet block (clean single-piece battlements)
+    let turret = Rect::from_center_size(
+        Pos2::new(c.x, c.y - s * 0.205),
+        Vec2::new(s * 0.44, s * 0.11),
     );
-    painter.rect(crown_beam, Rounding::same(s * 0.02), fill, outline);
+    painter.rect(turret, Rounding::same(s * 0.025), fill, outline);
 
-    // 3 battlements (merlons)
+    // 3 battlements merged smoothly onto turret
     for dx in [-0.155_f32, 0.0, 0.155] {
         let merlon = Rect::from_center_size(
-            Pos2::new(c.x + s * dx, c.y - s * 0.285),
-            Vec2::new(s * 0.105, s * 0.095),
+            Pos2::new(c.x + s * dx, c.y - s * 0.295),
+            Vec2::new(s * 0.115, s * 0.10),
         );
-        painter.rect(merlon, Rounding::same(s * 0.015), fill, outline);
+        painter.rect(merlon, Rounding::same(s * 0.022), fill, outline);
+    }
+    // Seam-erasing interior fill strip across top of turret so merlons feel unified
+    let unify = Rect::from_center_size(
+        Pos2::new(c.x, c.y - s * 0.23),
+        Vec2::new(s * 0.40, s * 0.055),
+    );
+    painter.rect_filled(unify, Rounding::same(s * 0.015), fill);
+
+    // Clean recessed horizontal shadow collar under parapet
+    if accent != Stroke::NONE {
+        painter.line_segment(
+            [
+                Pos2::new(c.x - s * 0.155, c.y - s * 0.145),
+                Pos2::new(c.x + s * 0.155, c.y - s * 0.145),
+            ],
+            accent,
+        );
     }
 
-    // Internal masonry vertical detail
-    painter.line_segment(
-        [
-            Pos2::new(c.x - s * 0.07, c.y - s * 0.09),
-            Pos2::new(c.x - s * 0.09, c.y + s * 0.17),
-        ],
-        accent,
-    );
-    painter.line_segment(
-        [
-            Pos2::new(c.x + s * 0.07, c.y - s * 0.09),
-            Pos2::new(c.x + s * 0.09, c.y + s * 0.17),
-        ],
-        accent,
-    );
-
-    draw_basepedestal(painter, c, s, 0.62, fill, outline, accent);
+    draw_neo_base(painter, c, s, 0.64, fill, shade, outline, accent);
 }
 
 fn draw_knight(
@@ -394,61 +504,89 @@ fn draw_knight(
     c: Pos2,
     s: f32,
     fill: Color32,
+    shade: Color32,
     inner_accent: Color32,
     outline: Stroke,
     accent: Stroke,
 ) {
-    // Neck and chest convex polygon
-    let neck_chest = vec![
-        Pos2::new(c.x - s * 0.08, c.y - s * 0.26),
-        Pos2::new(c.x + s * 0.19, c.y - s * 0.18),
-        Pos2::new(c.x + s * 0.24, c.y + s * 0.04),
-        Pos2::new(c.x + s * 0.23, c.y + s * 0.24),
-        Pos2::new(c.x - s * 0.22, c.y + s * 0.24),
-        Pos2::new(c.x - s * 0.16, c.y + s * 0.03),
+    // Sleek sculpted Chess.com Neo Knight (sweeping arched mane + strong snout, facing left)
+    let neck_body = vec![
+        Pos2::new(c.x - s * 0.06, c.y - s * 0.30),
+        Pos2::new(c.x + s * 0.09, c.y - s * 0.26),
+        Pos2::new(c.x + s * 0.21, c.y - s * 0.12),
+        Pos2::new(c.x + s * 0.25, c.y + s * 0.06),
+        Pos2::new(c.x + s * 0.23, c.y + s * 0.245),
+        Pos2::new(c.x - s * 0.21, c.y + s * 0.245),
+        Pos2::new(c.x - s * 0.15, c.y + s * 0.06),
+        Pos2::new(c.x - s * 0.05, c.y - s * 0.04),
     ];
-    painter.add(Shape::convex_polygon(neck_chest, fill, outline));
+    painter.add(Shape::convex_polygon(neck_body, fill, outline));
 
-    // Horse snout & jaw (facing left)
-    let head_snout = vec![
-        Pos2::new(c.x - s * 0.04, c.y - s * 0.30),
-        Pos2::new(c.x + s * 0.14, c.y - s * 0.22),
-        Pos2::new(c.x + s * 0.04, c.y - s * 0.06),
-        Pos2::new(c.x - s * 0.25, c.y - s * 0.08),
-        Pos2::new(c.x - s * 0.27, c.y - s * 0.17),
+    // Curved right mane shading band
+    let mane_shade = vec![
+        Pos2::new(c.x + s * 0.07, c.y - s * 0.24),
+        Pos2::new(c.x + s * 0.195, c.y - s * 0.11),
+        Pos2::new(c.x + s * 0.235, c.y + s * 0.06),
+        Pos2::new(c.x + s * 0.215, c.y + s * 0.23),
+        Pos2::new(c.x + s * 0.10, c.y + s * 0.23),
+        Pos2::new(c.x + s * 0.13, c.y + s * 0.02),
     ];
-    painter.add(Shape::convex_polygon(head_snout, fill, outline));
+    painter.add(Shape::convex_polygon(mane_shade, shade, Stroke::NONE));
 
-    // Pointed ear
+    // Expressive sculpted head + tapered muzzle
+    let head = vec![
+        Pos2::new(c.x - s * 0.03, c.y - s * 0.31),
+        Pos2::new(c.x + s * 0.11, c.y - s * 0.23),
+        Pos2::new(c.x + s * 0.05, c.y - s * 0.06),
+        Pos2::new(c.x - s * 0.07, c.y - s * 0.06),
+        Pos2::new(c.x - s * 0.24, c.y - s * 0.03),
+        Pos2::new(c.x - s * 0.29, c.y - s * 0.10),
+        Pos2::new(c.x - s * 0.25, c.y - s * 0.19),
+    ];
+    painter.add(Shape::convex_polygon(head, fill, outline));
+
+    // Seamless blend patch covering internal seam between head and neck
+    painter.circle_filled(Pos2::new(c.x + s * 0.01, c.y - s * 0.14), s * 0.10, fill);
+
+    // Alert swept-back ear
     let ear = vec![
-        Pos2::new(c.x - s * 0.05, c.y - s * 0.28),
-        Pos2::new(c.x + s * 0.02, c.y - s * 0.39),
-        Pos2::new(c.x + s * 0.10, c.y - s * 0.25),
+        Pos2::new(c.x - s * 0.06, c.y - s * 0.28),
+        Pos2::new(c.x - s * 0.02, c.y - s * 0.40),
+        Pos2::new(c.x + s * 0.09, c.y - s * 0.27),
     ];
     painter.add(Shape::convex_polygon(ear, fill, outline));
+    // Smooth ear join
+    painter.circle_filled(Pos2::new(c.x + s * 0.01, c.y - s * 0.275), s * 0.045, fill);
 
-    // Eye & nostril detail
+    // Expressive Neo eye & subtle nostril
+    let detail_col = if inner_accent == Color32::TRANSPARENT {
+        outline.color
+    } else {
+        outline.color
+    };
     painter.circle_filled(
-        Pos2::new(c.x - s * 0.08, c.y - s * 0.20),
-        s * 0.025,
-        inner_accent,
+        Pos2::new(c.x - s * 0.095, c.y - s * 0.205),
+        s * 0.026,
+        detail_col,
     );
     painter.circle_filled(
-        Pos2::new(c.x - s * 0.21, c.y - s * 0.13),
+        Pos2::new(c.x - s * 0.235, c.y - s * 0.105),
         s * 0.016,
-        inner_accent,
+        detail_col,
     );
 
-    // Mane curve line
-    painter.line_segment(
-        [
-            Pos2::new(c.x + s * 0.11, c.y - s * 0.19),
-            Pos2::new(c.x + s * 0.16, c.y + s * 0.14),
-        ],
-        accent,
-    );
+    // Clean curved mane accent
+    if accent != Stroke::NONE {
+        painter.line_segment(
+            [
+                Pos2::new(c.x + s * 0.11, c.y - s * 0.18),
+                Pos2::new(c.x + s * 0.165, c.y + s * 0.12),
+            ],
+            accent,
+        );
+    }
 
-    draw_basepedestal(painter, c, s, 0.62, fill, outline, accent);
+    draw_neo_base(painter, c, s, 0.64, fill, shade, outline, accent);
 }
 
 fn draw_bishop(
@@ -456,55 +594,81 @@ fn draw_bishop(
     c: Pos2,
     s: f32,
     fill: Color32,
+    shade: Color32,
+    _inner_accent: Color32,
     outline: Stroke,
     accent: Stroke,
 ) {
-    // Lower body skirt
-    let skirt = vec![
-        Pos2::new(c.x - s * 0.13, c.y - s * 0.02),
-        Pos2::new(c.x + s * 0.13, c.y - s * 0.02),
-        Pos2::new(c.x + s * 0.22, c.y + s * 0.24),
-        Pos2::new(c.x - s * 0.22, c.y + s * 0.24),
+    // Sleek flared lower body
+    let body = vec![
+        Pos2::new(c.x - s * 0.12, c.y - s * 0.01),
+        Pos2::new(c.x + s * 0.12, c.y - s * 0.01),
+        Pos2::new(c.x + s * 0.215, c.y + s * 0.245),
+        Pos2::new(c.x - s * 0.215, c.y + s * 0.245),
     ];
-    painter.add(Shape::convex_polygon(skirt, fill, outline));
+    painter.add(Shape::convex_polygon(body, fill, outline));
 
-    // Mitre dome (upper helmet)
+    // Right-side body shading
+    let body_shade = vec![
+        Pos2::new(c.x + s * 0.02, c.y),
+        Pos2::new(c.x + s * 0.11, c.y),
+        Pos2::new(c.x + s * 0.20, c.y + s * 0.23),
+        Pos2::new(c.x + s * 0.05, c.y + s * 0.23),
+    ];
+    painter.add(Shape::convex_polygon(body_shade, shade, Stroke::NONE));
+
+    // Smooth teardrop Bishop mitre (8-point rounded silhouette)
     let mitre = vec![
-        Pos2::new(c.x, c.y - s * 0.33),
-        Pos2::new(c.x + s * 0.16, c.y - s * 0.19),
-        Pos2::new(c.x + s * 0.18, c.y - s * 0.05),
-        Pos2::new(c.x - s * 0.18, c.y - s * 0.05),
-        Pos2::new(c.x - s * 0.16, c.y - s * 0.19),
+        Pos2::new(c.x, c.y - s * 0.345),
+        Pos2::new(c.x + s * 0.11, c.y - s * 0.27),
+        Pos2::new(c.x + s * 0.185, c.y - s * 0.15),
+        Pos2::new(c.x + s * 0.16, c.y - s * 0.03),
+        Pos2::new(c.x - s * 0.16, c.y - s * 0.03),
+        Pos2::new(c.x - s * 0.185, c.y - s * 0.15),
+        Pos2::new(c.x - s * 0.11, c.y - s * 0.27),
     ];
     painter.add(Shape::convex_polygon(mitre, fill, outline));
 
-    // Collar band
+    // Mitre right-side subtle shade
+    let mitre_shade = vec![
+        Pos2::new(c.x + s * 0.02, c.y - s * 0.31),
+        Pos2::new(c.x + s * 0.10, c.y - s * 0.255),
+        Pos2::new(c.x + s * 0.168, c.y - s * 0.145),
+        Pos2::new(c.x + s * 0.145, c.y - s * 0.045),
+        Pos2::new(c.x + s * 0.03, c.y - s * 0.045),
+    ];
+    painter.add(Shape::convex_polygon(mitre_shade, shade, Stroke::NONE));
+
+    // Collar pill
     let collar = Rect::from_center_size(
         Pos2::new(c.x, c.y - s * 0.02),
-        Vec2::new(s * 0.32, s * 0.055),
+        Vec2::new(s * 0.32, s * 0.058),
     );
-    painter.rect(collar, Rounding::same(s * 0.025), fill, outline);
+    painter.rect(collar, Rounding::same(s * 0.029), fill, outline);
 
-    // Top finial orb
-    painter.circle(Pos2::new(c.x, c.y - s * 0.365), s * 0.042, fill, outline);
+    // Top finial pearl
+    painter.circle(Pos2::new(c.x, c.y - s * 0.375), s * 0.045, fill, outline);
 
-    // Classic Bishop mitre cross/slit
+    // Iconic Chess.com diagonal mitre slash + subtle cross
+    let slash_stroke = Stroke::new((outline.width * 1.15).max(1.5), outline.color);
     painter.line_segment(
         [
-            Pos2::new(c.x - s * 0.06, c.y - s * 0.17),
-            Pos2::new(c.x + s * 0.06, c.y - s * 0.17),
+            Pos2::new(c.x + s * 0.015, c.y - s * 0.16),
+            Pos2::new(c.x + s * 0.14, c.y - s * 0.245),
         ],
-        accent,
+        slash_stroke,
     );
-    painter.line_segment(
-        [
-            Pos2::new(c.x, c.y - s * 0.23),
-            Pos2::new(c.x, c.y - s * 0.11),
-        ],
-        accent,
-    );
+    if accent != Stroke::NONE {
+        painter.line_segment(
+            [
+                Pos2::new(c.x - s * 0.055, c.y - s * 0.15),
+                Pos2::new(c.x + s * 0.025, c.y - s * 0.15),
+            ],
+            accent,
+        );
+    }
 
-    draw_basepedestal(painter, c, s, 0.62, fill, outline, accent);
+    draw_neo_base(painter, c, s, 0.64, fill, shade, outline, accent);
 }
 
 fn draw_queen(
@@ -512,62 +676,72 @@ fn draw_queen(
     c: Pos2,
     s: f32,
     fill: Color32,
+    shade: Color32,
     inner_accent: Color32,
     outline: Stroke,
     accent: Stroke,
 ) {
-    // Lower gown
+    // Graceful royal gown base
     let gown = vec![
-        Pos2::new(c.x - s * 0.18, c.y + s * 0.01),
-        Pos2::new(c.x + s * 0.18, c.y + s * 0.01),
-        Pos2::new(c.x + s * 0.25, c.y + s * 0.24),
-        Pos2::new(c.x - s * 0.25, c.y + s * 0.24),
+        Pos2::new(c.x - s * 0.19, c.y + s * 0.02),
+        Pos2::new(c.x + s * 0.19, c.y + s * 0.02),
+        Pos2::new(c.x + s * 0.25, c.y + s * 0.245),
+        Pos2::new(c.x - s * 0.25, c.y + s * 0.245),
     ];
     painter.add(Shape::convex_polygon(gown, fill, outline));
 
-    // Five-pointed royal coronet spikes (drawn as individual convex triangles)
+    let gown_shade = vec![
+        Pos2::new(c.x + s * 0.03, c.y + s * 0.035),
+        Pos2::new(c.x + s * 0.18, c.y + s * 0.035),
+        Pos2::new(c.x + s * 0.235, c.y + s * 0.23),
+        Pos2::new(c.x + s * 0.06, c.y + s * 0.23),
+    ];
+    painter.add(Shape::convex_polygon(gown_shade, shade, Stroke::NONE));
+
+    // Five sleek royal coronet spires
     let spike_tips = [
-        (-0.27_f32, -0.25_f32),
-        (-0.14, -0.32),
+        (-0.28_f32, -0.245_f32),
+        (-0.145, -0.32),
         (0.0, -0.35),
-        (0.14, -0.32),
-        (0.27, -0.25),
+        (0.145, -0.32),
+        (0.28, -0.245),
     ];
     let spike_bases = [-0.21_f32, -0.105, 0.0, 0.105, 0.21];
 
     for (i, &(tx, ty)) in spike_tips.iter().enumerate() {
         let bx = spike_bases[i];
         let tri = vec![
-            Pos2::new(c.x + s * (bx - 0.065), c.y + s * 0.03),
+            Pos2::new(c.x + s * (bx - 0.07), c.y + s * 0.04),
             Pos2::new(c.x + s * tx, c.y + s * ty),
-            Pos2::new(c.x + s * (bx + 0.065), c.y + s * 0.03),
+            Pos2::new(c.x + s * (bx + 0.07), c.y + s * 0.04),
         ];
         painter.add(Shape::convex_polygon(tri, fill, outline));
         painter.circle(
-            Pos2::new(c.x + s * tx, c.y + s * (ty - 0.025)),
-            s * 0.033,
+            Pos2::new(c.x + s * tx, c.y + s * (ty - 0.026)),
+            s * 0.036,
             fill,
             outline,
         );
     }
 
-    // Crown jewel band
+    // Unified smooth crown waist band (covers spike base seams cleanly!)
     let band = Rect::from_center_size(
         Pos2::new(c.x, c.y + s * 0.04),
-        Vec2::new(s * 0.42, s * 0.065),
+        Vec2::new(s * 0.43, s * 0.072),
     );
-    painter.rect(band, Rounding::same(s * 0.03), fill, outline);
+    painter.rect(band, Rounding::same(s * 0.036), fill, outline);
 
-    // Three jewels on the band
-    for jx in [-0.11_f32, 0.0, 0.11] {
-        painter.circle_filled(
-            Pos2::new(c.x + s * jx, c.y + s * 0.04),
-            s * 0.02,
-            inner_accent,
-        );
+    if inner_accent != Color32::TRANSPARENT {
+        for jx in [-0.115_f32, 0.0, 0.115] {
+            painter.circle_filled(
+                Pos2::new(c.x + s * jx, c.y + s * 0.04),
+                s * 0.019,
+                inner_accent,
+            );
+        }
     }
 
-    draw_basepedestal(painter, c, s, 0.66, fill, outline, accent);
+    draw_neo_base(painter, c, s, 0.68, fill, shade, outline, accent);
 }
 
 fn draw_king(
@@ -575,71 +749,88 @@ fn draw_king(
     c: Pos2,
     s: f32,
     fill: Color32,
+    shade: Color32,
     outline: Stroke,
     accent: Stroke,
 ) {
-    // Top cross vertical & horizontal bars
+    // Bold clean royal cross atop crown
     let cross_v = Rect::from_center_size(
-        Pos2::new(c.x, c.y - s * 0.355),
-        Vec2::new(s * 0.065, s * 0.16),
+        Pos2::new(c.x, c.y - s * 0.345),
+        Vec2::new(s * 0.068, s * 0.17),
     );
     let cross_h = Rect::from_center_size(
-        Pos2::new(c.x, c.y - s * 0.365),
-        Vec2::new(s * 0.16, s * 0.06),
+        Pos2::new(c.x, c.y - s * 0.355),
+        Vec2::new(s * 0.165, s * 0.062),
     );
-    painter.rect(cross_v, Rounding::same(s * 0.015), fill, outline);
-    painter.rect(cross_h, Rounding::same(s * 0.015), fill, outline);
+    painter.rect(cross_v, Rounding::same(s * 0.022), fill, outline);
+    painter.rect(cross_h, Rounding::same(s * 0.022), fill, outline);
+    // Clean inner cross fill so bars join seamlessly
+    painter.rect_filled(
+        Rect::from_center_size(Pos2::new(c.x, c.y - s * 0.355), Vec2::new(s * 0.055, s * 0.055)),
+        Rounding::ZERO,
+        fill,
+    );
 
-    // Royal mitre / arch crown
-    let crown = vec![
-        Pos2::new(c.x, c.y - s * 0.26),
-        Pos2::new(c.x + s * 0.24, c.y - s * 0.16),
-        Pos2::new(c.x + s * 0.19, c.y + s * 0.03),
-        Pos2::new(c.x - s * 0.19, c.y + s * 0.03),
-        Pos2::new(c.x - s * 0.24, c.y - s * 0.16),
+    // Classic Chess.com Neo dual-lobe rounded imperial crown
+    let left_lobe = Pos2::new(c.x - s * 0.13, c.y - s * 0.10);
+    let right_lobe = Pos2::new(c.x + s * 0.13, c.y - s * 0.10);
+    let lobe_r = s * 0.145;
+    painter.circle(left_lobe, lobe_r, fill, outline);
+    painter.circle(right_lobe, lobe_r, fill, outline);
+
+    // Central crown arch rising to cross
+    let center_arch = vec![
+        Pos2::new(c.x, c.y - s * 0.275),
+        Pos2::new(c.x + s * 0.13, c.y - s * 0.17),
+        Pos2::new(c.x + s * 0.20, c.y + s * 0.03),
+        Pos2::new(c.x - s * 0.20, c.y + s * 0.03),
+        Pos2::new(c.x - s * 0.13, c.y - s * 0.17),
     ];
-    painter.add(Shape::convex_polygon(crown, fill, outline));
+    painter.add(Shape::convex_polygon(center_arch, fill, outline));
+
+    // Right-lobe gentle shade
+    painter.circle_filled(
+        Pos2::new(right_lobe.x + s * 0.025, right_lobe.y + s * 0.015),
+        lobe_r * 0.72,
+        shade,
+    );
 
     // Lower robe pedestal
     let robe = vec![
-        Pos2::new(c.x - s * 0.18, c.y + s * 0.03),
-        Pos2::new(c.x + s * 0.18, c.y + s * 0.03),
-        Pos2::new(c.x + s * 0.25, c.y + s * 0.24),
-        Pos2::new(c.x - s * 0.25, c.y + s * 0.24),
+        Pos2::new(c.x - s * 0.19, c.y + s * 0.03),
+        Pos2::new(c.x + s * 0.19, c.y + s * 0.03),
+        Pos2::new(c.x + s * 0.255, c.y + s * 0.245),
+        Pos2::new(c.x - s * 0.255, c.y + s * 0.245),
     ];
     painter.add(Shape::convex_polygon(robe, fill, outline));
 
-    // Collar band
+    let robe_shade = vec![
+        Pos2::new(c.x + s * 0.03, c.y + s * 0.045),
+        Pos2::new(c.x + s * 0.18, c.y + s * 0.045),
+        Pos2::new(c.x + s * 0.24, c.y + s * 0.23),
+        Pos2::new(c.x + s * 0.06, c.y + s * 0.23),
+    ];
+    painter.add(Shape::convex_polygon(robe_shade, shade, Stroke::NONE));
+
+    // Sleek royal collar band
     let band = Rect::from_center_size(
-        Pos2::new(c.x, c.y + s * 0.03),
-        Vec2::new(s * 0.42, s * 0.065),
+        Pos2::new(c.x, c.y + s * 0.035),
+        Vec2::new(s * 0.44, s * 0.072),
     );
-    painter.rect(band, Rounding::same(s * 0.03), fill, outline);
+    painter.rect(band, Rounding::same(s * 0.036), fill, outline);
 
-    // Inner arch lines
-    painter.line_segment(
-        [
-            Pos2::new(c.x, c.y - s * 0.21),
-            Pos2::new(c.x, c.y - s * 0.02),
-        ],
-        accent,
-    );
-    painter.line_segment(
-        [
-            Pos2::new(c.x - s * 0.11, c.y - s * 0.16),
-            Pos2::new(c.x - s * 0.08, c.y - s * 0.02),
-        ],
-        accent,
-    );
-    painter.line_segment(
-        [
-            Pos2::new(c.x + s * 0.11, c.y - s * 0.16),
-            Pos2::new(c.x + s * 0.08, c.y - s * 0.02),
-        ],
-        accent,
-    );
+    // Subtle vertical crown crease
+    if accent != Stroke::NONE {
+        painter.line_segment(
+            [
+                Pos2::new(c.x, c.y - s * 0.22),
+                Pos2::new(c.x, c.y - s * 0.015),
+            ],
+            accent,
+        );
+    }
 
-    draw_basepedestal(painter, c, s, 0.68, fill, outline, accent);
+    draw_neo_base(painter, c, s, 0.70, fill, shade, outline, accent);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

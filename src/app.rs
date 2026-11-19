@@ -1,8 +1,8 @@
 use crate::{
     audio::{AudioEngine, SoundEffect},
     config::{
-        AnimationProfile, AssistanceMode, MoveInputMethod, NotationStyle, PieceSetStyle,
-        PlayColorChoice, SoundTheme, UserConfig,
+        AnimationProfile, AssistanceMode, MoveInputMethod, NotationStyle, PlayColorChoice,
+        SoundTheme, UserConfig,
     },
     domain::{
         detect_opening_from_records, format_fen, random_chess960_fen, AnnotationColor,
@@ -23,6 +23,7 @@ use crate::{
         board_view::BoardInteractionState,
         eval_bar::EvalBarState,
         modals::{
+            render_appearance_preview_selectors, show_appearance_picker_modal,
             show_command_palette, show_game_over_modal, CommandPaletteState, PaletteCommand,
         },
         pages::{
@@ -34,7 +35,7 @@ use crate::{
         piece_renderer::BotMood,
         side_panel::{render_player_strip, render_side_panel, show_bot_selector_modal},
         sidebar::{render_left_sidebar, ActiveRoute},
-        theme::{apply_global_style_with_mode, BoardTheme, UiTokens},
+        theme::{apply_global_style_with_mode, UiTokens},
         top_bar::render_top_bar,
     },
 };
@@ -89,6 +90,7 @@ pub struct RustyChessApp {
     pub show_bot_selector: bool,
     pub show_fen_pgn_modal: bool,
     pub show_settings_modal: bool,
+    pub show_appearance_modal: bool,
     pub custom_fen_input: String,
     pub fen_error_msg: Option<String>,
     pub uci_test_status: Option<String>,
@@ -161,6 +163,7 @@ impl RustyChessApp {
             show_bot_selector: false,
             show_fen_pgn_modal: false,
             show_settings_modal: false,
+            show_appearance_modal: false,
             custom_fen_input: String::new(),
             fen_error_msg: None,
             uci_test_status: None,
@@ -779,8 +782,9 @@ impl RustyChessApp {
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
-            .fixed_size(Vec2::new(480.0, 460.0))
+            .fixed_size(Vec2::new(560.0, 520.0))
             .show(ctx, |ui| {
+                let tokens = UiTokens::for_mode(self.config.dark_mode);
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
@@ -803,32 +807,9 @@ impl RustyChessApp {
                     }
                 });
 
-                ui.horizontal(|ui| {
-                    ui.label("Board Theme:");
-                    egui::ComboBox::from_id_salt("settings_board_theme")
-                        .selected_text(self.config.board_theme.name())
-                        .show_ui(ui, |ui| {
-                            for &t in BoardTheme::all() {
-                                ui.selectable_value(&mut self.config.board_theme, t, t.name());
-                            }
-                        });
-                });
-
-                ui.horizontal(|ui| {
-                    ui.label("Piece Set:");
-                    egui::ComboBox::from_id_salt("settings_piece_set")
-                        .selected_text(self.config.piece_set.label())
-                        .show_ui(ui, |ui| {
-                            for &ps in PieceSetStyle::all() {
-                                ui.selectable_value(&mut self.config.piece_set, ps, ps.label());
-                            }
-                        });
-                });
-
-                ui.checkbox(
-                    &mut self.config.textured_board,
-                    "Procedural Textured Board Surface (Wood / Linen / Slate / Ice)",
-                );
+                ui.add_space(6.0);
+                let _ = render_appearance_preview_selectors(ui, &mut self.config, &tokens);
+                ui.add_space(6.0);
 
                 ui.horizontal(|ui| {
                     ui.label("Animation Speed:");
@@ -1365,7 +1346,7 @@ impl eframe::App for RustyChessApp {
                                 self.show_fen_pgn_modal = true;
                             }
                             if top_actions.open_appearance_modal {
-                                self.show_settings_modal = true;
+                                self.show_appearance_modal = true;
                             }
                             if top_actions.toggle_zen_mode {
                                 self.zen_mode = !self.zen_mode;
@@ -1564,6 +1545,10 @@ impl eframe::App for RustyChessApp {
 
         self.show_fen_pgn_export_modal(ctx);
         self.show_settings_modal_window(ctx);
+        if show_appearance_picker_modal(ctx, &mut self.show_appearance_modal, &mut self.config) {
+            self.profile.config = self.config.clone();
+            self.profile.save();
+        }
 
         // Spotlight Command Palette (Ctrl+K) & Keyboard SAN Move Entry (Feature #10)
         if let Some(cmd) = show_command_palette(

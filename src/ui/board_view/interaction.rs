@@ -258,23 +258,16 @@ impl BoardInteractionState {
                 .render_animations(&painter, board_rect, flipped, config.piece_set);
         }
 
-        // Render dragged piece with Velocity-Based Lift & Shadow Physics (Feature #15a)
+        // Render dragged piece with smooth damped lift & feathered elliptical ground shadow
         if !config.blindfold_mode {
             if let (Some(drag_sq), Some(cursor_pos)) = (self.dragging_from, self.drag_pos) {
                 if let Some(piece) = displayed_pos.board().piece_at(drag_sq) {
                     let sq_size = board_rect.width() / 8.0;
-                    let speed = self.drag_velocity.length().clamp(0.0, 45.0);
-                    let lift_bonus = 1.0 + (speed / 45.0) * 0.08;
+                    let speed = self.drag_velocity.length().clamp(0.0, 38.0);
+                    let lift_bonus = 1.0 + (speed / 38.0) * 0.05;
                     let tilt_offset = Vec2::new(
-                        (self.drag_velocity.x * 0.18).clamp(-6.0, 6.0),
-                        (self.drag_velocity.y * 0.10).clamp(-4.0, 4.0) - (speed * 0.08),
-                    );
-                    // Dynamic shadow trailing behind drag velocity
-                    let shadow_c = cursor_pos - tilt_offset * 0.9 + Vec2::new(3.0, sq_size * 0.28);
-                    painter.circle_filled(
-                        shadow_c,
-                        sq_size * 0.34,
-                        Color32::from_rgba_unmultiplied(0, 0, 0, 55),
+                        (self.drag_velocity.x * 0.10).clamp(-3.5, 3.5),
+                        (self.drag_velocity.y * 0.06).clamp(-2.5, 2.5) - (speed * 0.05),
                     );
                     draw_chess_piece_styled(
                         &painter,

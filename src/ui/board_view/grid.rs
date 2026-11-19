@@ -90,7 +90,7 @@ pub fn render_board_grid(
         hint_arrow,
         dragged_from,
         &[],
-        PieceSetStyle::ClassicStaunton,
+        PieceSetStyle::ChessComNeo,
         None,
     );
 }

@@ -521,7 +521,7 @@ impl BoardAnimationLayer {
             );
         }
 
-        // 4. Active sliding pieces (5 animation profiles)
+        // 4. Active sliding pieces (smooth fluid glide with zero shadow snapping)
         for slide in &self.active_slides {
             let elapsed = now.saturating_duration_since(slide.started_at).as_millis() as f32;
             let raw_t = (elapsed / (slide.duration_ms.max(1) as f32)).clamp(0.0, 1.0);
@@ -529,7 +529,11 @@ impl BoardAnimationLayer {
 
             let from_c = square_to_rect(board_rect, slide.from, flipped).center();
             let to_c = square_to_rect(board_rect, slide.to, flipped).center();
-            let pos = from_c + (to_c - from_c) * eased_t;
+            let arc_lift = (raw_t * PI).sin() * sq_size * 0.045;
+            let pos = Pos2::new(
+                from_c.x + (to_c.x - from_c.x) * eased_t,
+                from_c.y + (to_c.y - from_c.y) * eased_t - arc_lift,
+            );
 
             draw_chess_piece_styled(
                 painter,
@@ -537,7 +541,7 @@ impl BoardAnimationLayer {
                 sq_size * lift_scale,
                 slide.color,
                 slide.role,
-                lift_scale > 1.02,
+                false,
                 piece_set,
             );
         }
