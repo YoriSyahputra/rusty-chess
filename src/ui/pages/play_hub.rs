@@ -14,6 +14,7 @@ use egui::{Color32, RichText, Rounding, Sense, Stroke, Ui, Vec2};
 pub struct PlayHubActions {
     pub navigate_to: Option<ActiveRoute>,
     pub start_coach_mode: bool,
+    pub start_chess960: bool,
     pub start_pass_and_play: bool,
     pub open_custom_fen_modal: bool,
 }
@@ -99,6 +100,32 @@ pub fn render_play_hub(
                         &tokens,
                     ) {
                         actions.navigate_to = Some(ActiveRoute::Endgames);
+                    }
+
+                    ui.add_space(8.0);
+
+                    if render_mode_selector_card(
+                        ui,
+                        "🎲  Play Chess960 (Fischer Random)",
+                        "Battle any bot from one of 960 randomized Scharnagl back-rank setups with full Chess960 castling rules.",
+                        "Start Random Chess960",
+                        Color32::from_rgb(195, 115, 225),
+                        &tokens,
+                    ) {
+                        actions.start_chess960 = true;
+                    }
+
+                    ui.add_space(8.0);
+
+                    if render_mode_selector_card(
+                        ui,
+                        "🎯  Coordinate Speed Vision Trainer",
+                        "Train 30-second blind square recognition (a1–h8) to level up your board visualization speed.",
+                        "Launch Vision Trainer",
+                        Color32::from_rgb(235, 155, 55),
+                        &tokens,
+                    ) {
+                        actions.navigate_to = Some(ActiveRoute::Vision);
                     }
 
                     ui.add_space(8.0);

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 APP_NAME="rusty-chess"
-APP_VERSION="0.2.0"
+APP_VERSION="1.0.0"
 ARCH="amd64"
 PKG_DIR_NAME="${APP_NAME}_${APP_VERSION}_${ARCH}"
 STAGING_ROOT="build-deb/${PKG_DIR_NAME}"

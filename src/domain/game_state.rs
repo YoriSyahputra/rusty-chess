@@ -1,6 +1,9 @@
 use crate::domain::{
+    chess960::chess960_fen,
     clock::{ChessClock, TimeControl},
-    notation::{format_fen, format_san, parse_fen, position_zobrist_hash, INITIAL_FEN},
+    notation::{
+        format_fen, format_san, parse_fen, parse_fen_chess960, position_zobrist_hash, INITIAL_FEN,
+    },
     types::{
         role_point_value, role_sort_priority, GameOutcome, MarkedSquare, MoveRecord,
         PlayerController, TacticalArrow,
@@ -67,6 +70,43 @@ impl ChessMatchState {
 
     pub fn from_fen(fen_str: &str, human_color: Color) -> Result<Self, String> {
         let initial_pos = parse_fen(fen_str)?;
+        let initial_fen = format_fen(&initial_pos);
+        let initial_hash = position_zobrist_hash(&initial_pos);
+        let (white_controller, black_controller) = match human_color {
+            Color::White => (PlayerController::Human, PlayerController::Bot),
+            Color::Black => (PlayerController::Bot, PlayerController::Human),
+        };
+        let mut clock = ChessClock::new(TimeControl::Rapid10_0);
+        clock.start(initial_pos.turn());
+
+        let mut state = Self {
+            initial_pos: initial_pos.clone(),
+            initial_fen,
+            current_pos: initial_pos,
+            viewed_ply: 0,
+            history: Vec::with_capacity(128),
+            position_hashes: vec![initial_hash],
+            white_controller,
+            black_controller,
+            human_color,
+            last_move: None,
+            captured_by_white: Vec::new(),
+            captured_by_black: Vec::new(),
+            material_balance: 0,
+            outcome: GameOutcome::Ongoing,
+            clock,
+            arrows: Vec::new(),
+            marked_squares: Vec::new(),
+        };
+        state.recalculate_material_and_captures();
+        state.outcome = state.evaluate_outcome();
+        Ok(state)
+    }
+
+    /// Membuat partai Chess960 (Fischer Random) berdasarkan ID Scharnagl `0..=959`.
+    pub fn from_chess960(id: u16, human_color: Color) -> Result<Self, String> {
+        let fen_str = chess960_fen(id);
+        let initial_pos = parse_fen_chess960(&fen_str)?;
         let initial_fen = format_fen(&initial_pos);
         let initial_hash = position_zobrist_hash(&initial_pos);
         let (white_controller, black_controller) = match human_color {

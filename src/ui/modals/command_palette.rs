@@ -14,6 +14,8 @@ pub enum PaletteCommand {
     SetPieceSet(PieceSetStyle),
     ToggleXRay,
     ToggleZenMode,
+    ToggleBlindfold,
+    StartChess960,
     ToggleDarkLight,
     FlipBoard,
     OpenFenPgn,
@@ -254,6 +256,21 @@ fn build_palette_items() -> Vec<PaletteItem> {
             label: "🧘 Toggle Zen / Focus Mode (Z)".into(),
             category: "View",
             cmd: PaletteCommand::ToggleZenMode,
+        },
+        PaletteItem {
+            label: "🙈 Toggle Blindfold Mode (Hide Pieces)".into(),
+            category: "Training",
+            cmd: PaletteCommand::ToggleBlindfold,
+        },
+        PaletteItem {
+            label: "🎲 Start Chess960 (Fischer Random) Match".into(),
+            category: "Modes",
+            cmd: PaletteCommand::StartChess960,
+        },
+        PaletteItem {
+            label: "🎯 Open Coordinate Speed Vision Trainer".into(),
+            category: "Training",
+            cmd: PaletteCommand::Navigate(ActiveRoute::Vision),
         },
         PaletteItem {
             label: "👁 Toggle X-Ray Square Control Heatmap (X)".into(),

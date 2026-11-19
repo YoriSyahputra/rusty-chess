@@ -5,8 +5,9 @@ use crate::{
         PlayColorChoice, SoundTheme, UserConfig,
     },
     domain::{
-        detect_opening_from_records, format_fen, AnnotationColor, ChessMatchState, Color,
-        GameOutcome, Move, PlayerController, Role, TacticalArrow, TimeControl,
+        detect_opening_from_records, format_fen, random_chess960_fen, AnnotationColor,
+        ChessMatchState, Color, GameOutcome, Move, PlayerController, Role, TacticalArrow,
+        TimeControl,
     },
     engine::{
         bot::{
@@ -27,7 +28,8 @@ use crate::{
         pages::{
             render_analytics_page, render_bot_arena_page, render_bots_lobby, render_endgames_page,
             render_home_page, render_play_hub, render_puzzles_page, render_review_page,
-            BotArenaState, BotsLobbyState, PuzzlesTrainerState, ReviewViewState,
+            render_vision_trainer_page, BotArenaState, BotsLobbyState, PuzzlesTrainerState,
+            ReviewViewState, VisionTrainerState,
         },
         piece_renderer::BotMood,
         side_panel::{render_player_strip, render_side_panel, show_bot_selector_modal},
@@ -50,6 +52,7 @@ pub struct RustyChessApp {
     pub puzzles_state: PuzzlesTrainerState,
     pub endgames_selected_idx: usize,
     pub arena_state: BotArenaState,
+    pub vision_state: VisionTrainerState,
     pub review_state: ReviewViewState,
     pub match_state: ChessMatchState,
     pub bot_persona: BotPersona,
@@ -127,6 +130,7 @@ impl RustyChessApp {
             puzzles_state: PuzzlesTrainerState::default(),
             endgames_selected_idx: 0,
             arena_state: BotArenaState::default(),
+            vision_state: VisionTrainerState::default(),
             review_state: ReviewViewState::default(),
             match_state,
             bot_persona,
@@ -224,6 +228,45 @@ impl RustyChessApp {
         self.bot_dialogue = "Pass & Play (2-Player Local Mode) active.".to_string();
         self.human_turn_started_at = Instant::now();
         self.audio.play(SoundEffect::GameStart);
+    }
+
+    pub fn start_chess960_match(&mut self, bot_id: BotId, human_color: Color) {
+        let (id, _fen) = random_chess960_fen();
+        let Ok(mut state) = ChessMatchState::from_chess960(id, human_color) else {
+            return;
+        };
+        state.set_time_control(self.config.time_control);
+
+        self.abort_engine();
+        self.bot_persona = match bot_id {
+            BotId::AdaptiveJimmy => BotPersona::adaptive_jimmy(self.profile.adaptive_jimmy_elo),
+            BotId::EngineCustom => BotPersona::engine_custom(self.lobby_state.custom_engine_elo),
+            other => BotPersona::by_id(other),
+        };
+        self.config.board_flipped = human_color == Color::Black;
+        let initial_eval = evaluate_for_white(&state.current_pos, &self.bot_persona.weights);
+        self.match_state = state;
+        self.board_ui.reset();
+        self.eval_bar.set_eval_cp(initial_eval);
+        self.review_state = ReviewViewState::default();
+        self.last_eval_cp_white = initial_eval;
+        self.entered_endgame_announced = false;
+        self.hints_used = 0;
+        self.takebacks_used = 0;
+        self.match_result_recorded = false;
+        self.show_game_over = false;
+        self.last_awarded_crowns = 0;
+        self.has_active_match = true;
+        self.active_route = ActiveRoute::Match;
+        self.bot_dialogue = format!(
+            "🎲 Chess960 Position #{id}! No memorized theory can save you now!"
+        );
+        self.human_turn_started_at = Instant::now();
+        self.audio.play(SoundEffect::GameStart);
+
+        if self.match_state.is_bot_turn() {
+            self.dispatch_bot_search();
+        }
     }
 
     pub fn start_from_custom_fen(&mut self, fen_str: &str) -> Result<(), String> {
@@ -840,6 +883,10 @@ impl RustyChessApp {
                     &mut self.config.show_xray_heatmap,
                     "X-Ray Square Control & Hanging Piece Heatmap (X)",
                 );
+                ui.checkbox(
+                    &mut self.config.blindfold_mode,
+                    "🙈 Blindfold Mode (Hide pieces — visualize moves in your mind!)",
+                );
                 ui.checkbox(&mut self.config.sound_enabled, "Enable Sound Effects");
                 ui.horizontal(|ui| {
                     ui.label("Sound Theme:");
@@ -1176,6 +1223,9 @@ impl eframe::App for RustyChessApp {
                             self.config.time_control,
                         );
                     }
+                    if hub_actions.start_chess960 {
+                        self.start_chess960_match(self.lobby_state.selected_bot, Color::White);
+                    }
                     if hub_actions.start_pass_and_play {
                         self.start_pass_and_play_match();
                     }
@@ -1249,6 +1299,18 @@ impl eframe::App for RustyChessApp {
             ActiveRoute::Arena => {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     render_bot_arena_page(ui, &mut self.arena_state, &self.config);
+                });
+            }
+
+            ActiveRoute::Vision => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    render_vision_trainer_page(
+                        ui,
+                        &mut self.vision_state,
+                        &mut self.profile,
+                        self.config.board_theme,
+                        self.config.dark_mode,
+                    );
                 });
             }
 
@@ -1529,6 +1591,14 @@ impl eframe::App for RustyChessApp {
                 }
                 PaletteCommand::ToggleZenMode => {
                     self.zen_mode = !self.zen_mode;
+                }
+                PaletteCommand::ToggleBlindfold => {
+                    self.config.blindfold_mode = !self.config.blindfold_mode;
+                    self.profile.config = self.config.clone();
+                    self.profile.save();
+                }
+                PaletteCommand::StartChess960 => {
+                    self.start_chess960_match(self.lobby_state.selected_bot, Color::White);
                 }
                 PaletteCommand::ToggleDarkLight => {
                     self.config.dark_mode = !self.config.dark_mode;

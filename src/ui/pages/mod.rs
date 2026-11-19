@@ -6,6 +6,7 @@ pub mod home;
 pub mod play_hub;
 pub mod puzzles;
 pub mod review_view;
+pub mod vision_trainer;
 
 pub use analytics::{draw_skill_radar_chart, render_analytics_page, AnalyticsPageActions};
 pub use arena::{render_bot_arena_page, BotArenaState};
@@ -18,3 +19,4 @@ pub use puzzles::{
     CURATED_PUZZLES,
 };
 pub use review_view::{render_review_page, ReviewViewState};
+pub use vision_trainer::{render_vision_trainer_page, VisionTrainerState};

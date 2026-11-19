@@ -170,6 +170,11 @@ impl BoardInteractionState {
         };
 
         let hidden_squares = self.anim_layer.prune_and_collect_hidden_squares();
+        let effective_hidden: &[Square] = if config.blindfold_mode {
+            &Square::ALL
+        } else {
+            &hidden_squares
+        };
         let first_premove_squares = self.queued_premoves.front().map(|pm| (pm.from, pm.to));
 
         let palette = config.board_theme.palette();
@@ -206,7 +211,7 @@ impl BoardInteractionState {
             preview_arrow,
             self.hint_arrow,
             self.dragging_from,
-            &hidden_squares,
+            effective_hidden,
             config.piece_set,
             tex_id,
         );
@@ -248,35 +253,39 @@ impl BoardInteractionState {
         }
 
         // Render active piece slide animations, capture fades, particles, confetti, spring badges & King badges
-        self.anim_layer
-            .render_animations(&painter, board_rect, flipped, config.piece_set);
+        if !config.blindfold_mode {
+            self.anim_layer
+                .render_animations(&painter, board_rect, flipped, config.piece_set);
+        }
 
         // Render dragged piece with Velocity-Based Lift & Shadow Physics (Feature #15a)
-        if let (Some(drag_sq), Some(cursor_pos)) = (self.dragging_from, self.drag_pos) {
-            if let Some(piece) = displayed_pos.board().piece_at(drag_sq) {
-                let sq_size = board_rect.width() / 8.0;
-                let speed = self.drag_velocity.length().clamp(0.0, 45.0);
-                let lift_bonus = 1.0 + (speed / 45.0) * 0.08;
-                let tilt_offset = Vec2::new(
-                    (self.drag_velocity.x * 0.18).clamp(-6.0, 6.0),
-                    (self.drag_velocity.y * 0.10).clamp(-4.0, 4.0) - (speed * 0.08),
-                );
-                // Dynamic shadow trailing behind drag velocity
-                let shadow_c = cursor_pos - tilt_offset * 0.9 + Vec2::new(3.0, sq_size * 0.28);
-                painter.circle_filled(
-                    shadow_c,
-                    sq_size * 0.34,
-                    Color32::from_rgba_unmultiplied(0, 0, 0, 55),
-                );
-                draw_chess_piece_styled(
-                    &painter,
-                    cursor_pos + tilt_offset,
-                    sq_size * lift_bonus,
-                    piece.color,
-                    piece.role,
-                    true,
-                    config.piece_set,
-                );
+        if !config.blindfold_mode {
+            if let (Some(drag_sq), Some(cursor_pos)) = (self.dragging_from, self.drag_pos) {
+                if let Some(piece) = displayed_pos.board().piece_at(drag_sq) {
+                    let sq_size = board_rect.width() / 8.0;
+                    let speed = self.drag_velocity.length().clamp(0.0, 45.0);
+                    let lift_bonus = 1.0 + (speed / 45.0) * 0.08;
+                    let tilt_offset = Vec2::new(
+                        (self.drag_velocity.x * 0.18).clamp(-6.0, 6.0),
+                        (self.drag_velocity.y * 0.10).clamp(-4.0, 4.0) - (speed * 0.08),
+                    );
+                    // Dynamic shadow trailing behind drag velocity
+                    let shadow_c = cursor_pos - tilt_offset * 0.9 + Vec2::new(3.0, sq_size * 0.28);
+                    painter.circle_filled(
+                        shadow_c,
+                        sq_size * 0.34,
+                        Color32::from_rgba_unmultiplied(0, 0, 0, 55),
+                    );
+                    draw_chess_piece_styled(
+                        &painter,
+                        cursor_pos + tilt_offset,
+                        sq_size * lift_bonus,
+                        piece.color,
+                        piece.role,
+                        true,
+                        config.piece_set,
+                    );
+                }
             }
         }
 

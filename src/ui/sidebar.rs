@@ -14,6 +14,7 @@ pub enum ActiveRoute {
     Puzzles,
     Endgames,
     Arena,
+    Vision,
     Review,
     Analytics,
 }
@@ -66,7 +67,7 @@ pub fn render_left_sidebar(
                             .color(tokens.text_primary),
                     );
                     ui.label(
-                        RichText::new("👑 v0.2.0")
+                        RichText::new("👑 v1.0.0")
                             .size(10.5)
                             .color(tokens.accent_gold),
                     );
@@ -74,7 +75,7 @@ pub fn render_left_sidebar(
             }
         });
 
-        ui.add_space(14.0);
+        ui.add_space(10.0);
 
         // 2. Navigation Destinations
         let nav_items = [
@@ -84,6 +85,7 @@ pub fn render_left_sidebar(
             (ActiveRoute::Puzzles, "🧩", "Puzzles"),
             (ActiveRoute::Endgames, "♔", "Endgames"),
             (ActiveRoute::Arena, "⚔", "Arena"),
+            (ActiveRoute::Vision, "🎯", "Vision"),
             (ActiveRoute::Review, "📊", "Review"),
             (ActiveRoute::Analytics, "📈", "Insights"),
         ];

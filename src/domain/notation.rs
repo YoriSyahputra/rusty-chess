@@ -8,14 +8,26 @@ use shakmaty::{
 
 pub const INITIAL_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-/// Mem-parsing string FEN menjadi objek posisi `shakmaty::Chess`.
+/// Mem-parsing string FEN menjadi objek posisi `shakmaty::Chess` (mendukung Standard & Chess960).
 pub fn parse_fen(fen_str: &str) -> Result<Chess, String> {
     let trimmed = fen_str.trim();
     let fen: Fen = trimmed
         .parse()
         .map_err(|e| format!("Invalid FEN syntax: {e}"))?;
-    fen.into_position(CastlingMode::Standard)
+    fen.clone()
+        .into_position(CastlingMode::Standard)
+        .or_else(|_| fen.into_position(CastlingMode::Chess960))
         .map_err(|e| format!("Illegal chess position in FEN: {e}"))
+}
+
+/// Mem-parsing string X-FEN secara eksplisit dalam mode `CastlingMode::Chess960` (Fischer Random).
+pub fn parse_fen_chess960(fen_str: &str) -> Result<Chess, String> {
+    let trimmed = fen_str.trim();
+    let fen: Fen = trimmed
+        .parse()
+        .map_err(|e| format!("Invalid Chess960 FEN syntax: {e}"))?;
+    fen.into_position(CastlingMode::Chess960)
+        .map_err(|e| format!("Illegal Chess960 position: {e}"))
 }
 
 /// Menghasilkan string FEN standar dari posisi `shakmaty::Chess`.
