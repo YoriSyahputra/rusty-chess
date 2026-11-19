@@ -33,7 +33,7 @@ pub fn render_play_hub(
         .exact_width(380.0)
         .resizable(false)
         .show_inside(ui, |ui| {
-            ui.add_space(12.0);
+            ui.add_space(10.0);
             ui.label(
                 RichText::new("♟ Choose Game Mode")
                     .strong()
@@ -45,57 +45,89 @@ pub fn render_play_hub(
                     .size(12.5)
                     .color(tokens.text_secondary),
             );
-            ui.add_space(14.0);
-
-            if render_mode_selector_card(
-                ui,
-                "🤖  Play Computer Bots",
-                "Challenge 18 distinct AI personalities from Beginner to Grandmaster, earn up to 54 Crowns, or dial in a custom ELO engine.",
-                "Select Bot Opponent",
-                tokens.accent_primary,
-                &tokens,
-            ) {
-                actions.navigate_to = Some(ActiveRoute::PlayBots);
-            }
-
             ui.add_space(10.0);
 
-            if render_mode_selector_card(
-                ui,
-                "🎓  Play with Coach (Assisted)",
-                "Practice in Friendly/Assisted mode with real-time move evaluations, threat arrows, best-move hints, and takebacks.",
-                "Start Guided Match",
-                tokens.accent_info,
-                &tokens,
-            ) {
-                actions.start_coach_mode = true;
-            }
+            egui::ScrollArea::vertical()
+                .id_salt("play_hub_modes_scroll")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    if render_mode_selector_card(
+                        ui,
+                        "🤖  Play Computer Bots",
+                        "Challenge 18 distinct AI personalities from Beginner to Grandmaster, earn up to 54 Crowns, or dial in a custom ELO engine.",
+                        "Select Bot Opponent",
+                        tokens.accent_primary,
+                        &tokens,
+                    ) {
+                        actions.navigate_to = Some(ActiveRoute::PlayBots);
+                    }
 
-            ui.add_space(10.0);
+                    ui.add_space(8.0);
 
-            if render_mode_selector_card(
-                ui,
-                "👥  Pass & Play (Local 2-Player)",
-                "Play over-the-board with a friend on the same screen with full chess clock support and post-game review.",
-                "Start 2-Player Board",
-                tokens.accent_gold,
-                &tokens,
-            ) {
-                actions.start_pass_and_play = true;
-            }
+                    if render_mode_selector_card(
+                        ui,
+                        "🎓  Play with Coach (Assisted)",
+                        "Practice in Friendly/Assisted mode with real-time move evaluations, threat arrows, best-move hints, and takebacks.",
+                        "Start Guided Match",
+                        tokens.accent_info,
+                        &tokens,
+                    ) {
+                        actions.start_coach_mode = true;
+                    }
 
-            ui.add_space(10.0);
+                    ui.add_space(8.0);
 
-            if render_mode_selector_card(
-                ui,
-                "📋  Custom Position (FEN)",
-                "Paste any FEN string to practice specific endgames, opening tabiyas, or tactical studies against any bot.",
-                "Load FEN Position",
-                Color32::from_rgb(155, 110, 235),
-                &tokens,
-            ) {
-                actions.open_custom_fen_modal = true;
-            }
+                    if render_mode_selector_card(
+                        ui,
+                        "⚔  Bot vs. Bot Exhibition Arena",
+                        "Pit any two AI personalities (like Mittens vs GM Magnus!) against each other with live eval bar and trash-talk.",
+                        "Open Bot Arena",
+                        Color32::from_rgb(225, 95, 70),
+                        &tokens,
+                    ) {
+                        actions.navigate_to = Some(ActiveRoute::Arena);
+                    }
+
+                    ui.add_space(8.0);
+
+                    if render_mode_selector_card(
+                        ui,
+                        "♔  Endgame Mastery Drills",
+                        "Train Lucena, Philidor, Opposition, and Bishop+Knight checkmate directly against GM Magnus.",
+                        "Open Endgame Drills",
+                        Color32::from_rgb(65, 165, 145),
+                        &tokens,
+                    ) {
+                        actions.navigate_to = Some(ActiveRoute::Endgames);
+                    }
+
+                    ui.add_space(8.0);
+
+                    if render_mode_selector_card(
+                        ui,
+                        "👥  Pass & Play (Local 2-Player)",
+                        "Play over-the-board with a friend on the same screen with full chess clock support and post-game review.",
+                        "Start 2-Player Board",
+                        tokens.accent_gold,
+                        &tokens,
+                    ) {
+                        actions.start_pass_and_play = true;
+                    }
+
+                    ui.add_space(8.0);
+
+                    if render_mode_selector_card(
+                        ui,
+                        "📋  Custom Position (FEN)",
+                        "Paste any FEN string to practice specific endgames, opening tabiyas, or tactical studies against any bot.",
+                        "Load FEN Position",
+                        Color32::from_rgb(155, 110, 235),
+                        &tokens,
+                    ) {
+                        actions.open_custom_fen_modal = true;
+                    }
+                    ui.add_space(8.0);
+                });
         });
 
     egui::CentralPanel::default().show_inside(ui, |ui| {

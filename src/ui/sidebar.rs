@@ -12,6 +12,8 @@ pub enum ActiveRoute {
     PlayBots,
     Match,
     Puzzles,
+    Endgames,
+    Arena,
     Review,
     Analytics,
 }
@@ -80,6 +82,8 @@ pub fn render_left_sidebar(
             (ActiveRoute::PlayHub, "♟", "Play"),
             (ActiveRoute::PlayBots, "🤖", "Bots"),
             (ActiveRoute::Puzzles, "🧩", "Puzzles"),
+            (ActiveRoute::Endgames, "♔", "Endgames"),
+            (ActiveRoute::Arena, "⚔", "Arena"),
             (ActiveRoute::Review, "📊", "Review"),
             (ActiveRoute::Analytics, "📈", "Insights"),
         ];
@@ -89,7 +93,7 @@ pub fn render_left_sidebar(
             if render_nav_button(ui, icon, label, is_active, compact, &tokens) {
                 actions.navigate_to = Some(route);
             }
-            ui.add_space(4.0);
+            ui.add_space(3.0);
         }
 
         if has_active_match {
@@ -223,7 +227,7 @@ fn render_nav_button(
         .stroke(stroke)
         .rounding(Rounding::same(6.0_f32));
 
-    ui.add_sized([w, 38.0], btn)
+    ui.add_sized([w, 34.0], btn)
         .on_hover_text(label)
         .clicked()
 }

@@ -24,9 +24,9 @@ use crate::{
             show_command_palette, show_game_over_modal, CommandPaletteState, PaletteCommand,
         },
         pages::{
-            render_analytics_page, render_bots_lobby, render_home_page, render_play_hub,
-            render_puzzles_page, render_review_page, BotsLobbyState, PuzzlesTrainerState,
-            ReviewViewState,
+            render_analytics_page, render_bot_arena_page, render_bots_lobby, render_endgames_page,
+            render_home_page, render_play_hub, render_puzzles_page, render_review_page,
+            BotArenaState, BotsLobbyState, PuzzlesTrainerState, ReviewViewState,
         },
         piece_renderer::BotMood,
         side_panel::{render_player_strip, render_side_panel, show_bot_selector_modal},
@@ -47,6 +47,8 @@ pub struct RustyChessApp {
     pub config: UserConfig,
     pub lobby_state: BotsLobbyState,
     pub puzzles_state: PuzzlesTrainerState,
+    pub endgames_selected_idx: usize,
+    pub arena_state: BotArenaState,
     pub review_state: ReviewViewState,
     pub match_state: ChessMatchState,
     pub bot_persona: BotPersona,
@@ -121,6 +123,8 @@ impl RustyChessApp {
             config,
             lobby_state,
             puzzles_state: PuzzlesTrainerState::default(),
+            endgames_selected_idx: 0,
+            arena_state: BotArenaState::default(),
             review_state: ReviewViewState::default(),
             match_state,
             bot_persona,
@@ -1146,6 +1150,29 @@ impl eframe::App for RustyChessApp {
                         &mut self.profile,
                         &self.config,
                     );
+                });
+            }
+
+            ActiveRoute::Endgames => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let eg_actions = render_endgames_page(
+                        ui,
+                        &mut self.endgames_selected_idx,
+                        self.config.board_theme,
+                        self.config.dark_mode,
+                    );
+                    if let Some(fen) = eg_actions.launch_drill_fen {
+                        self.bot_persona = BotPersona::magnus();
+                        self.match_state.human_color = Color::White;
+                        self.config.board_flipped = false;
+                        let _ = self.start_from_custom_fen(&fen);
+                    }
+                });
+            }
+
+            ActiveRoute::Arena => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    render_bot_arena_page(ui, &mut self.arena_state, &self.config);
                 });
             }
 

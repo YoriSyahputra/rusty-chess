@@ -6,6 +6,7 @@ use crate::{
 };
 use egui::{Color32, RichText, Rounding, ScrollArea, Stroke, Ui};
 use shakmaty::Position;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy)]
 pub struct TacticalPuzzle {
@@ -279,7 +280,23 @@ pub const CURATED_PUZZLES: &[TacticalPuzzle] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PuzzleTabMode {
     Curated,
+    PuzzleRush,
     BlunderDeck,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RushVariant {
+    Timed3Min,
+    Survival,
+}
+
+impl RushVariant {
+    pub fn label(self) -> &'static str {
+        match self {
+            RushVariant::Timed3Min => "⏱ 3-Min Timed",
+            RushVariant::Survival => "💀 3-Strike Survival",
+        }
+    }
 }
 
 pub struct PuzzlesTrainerState {
@@ -296,6 +313,16 @@ pub struct PuzzlesTrainerState {
     pub status_is_positive: bool,
     pub board_state: ChessMatchState,
     pub board_ui: BoardInteractionState,
+
+    // Puzzle Rush state (Feature #20)
+    pub rush_variant: RushVariant,
+    pub rush_active: bool,
+    pub rush_finished: bool,
+    pub rush_score: u32,
+    pub rush_strikes: u8,
+    pub rush_started_at: Option<Instant>,
+    pub rush_order: Vec<usize>,
+    pub rush_cursor: usize,
 }
 
 impl Default for PuzzlesTrainerState {
@@ -314,6 +341,14 @@ impl Default for PuzzlesTrainerState {
             status_is_positive: true,
             board_state: ChessMatchState::new_standard(Color::White),
             board_ui: BoardInteractionState::default(),
+            rush_variant: RushVariant::Timed3Min,
+            rush_active: false,
+            rush_finished: false,
+            rush_score: 0,
+            rush_strikes: 0,
+            rush_started_at: None,
+            rush_order: Vec::new(),
+            rush_cursor: 0,
         };
         s.load_puzzle(0);
         s
@@ -321,6 +356,76 @@ impl Default for PuzzlesTrainerState {
 }
 
 impl PuzzlesTrainerState {
+    pub fn open_puzzle_rush(&mut self) {
+        self.tab_mode = PuzzleTabMode::PuzzleRush;
+        if !self.rush_active && !self.rush_finished {
+            self.start_puzzle_rush(self.rush_variant);
+        }
+    }
+
+    pub fn start_puzzle_rush(&mut self, variant: RushVariant) {
+        self.tab_mode = PuzzleTabMode::PuzzleRush;
+        self.rush_variant = variant;
+        self.rush_active = true;
+        self.rush_finished = false;
+        self.rush_score = 0;
+        self.rush_strikes = 0;
+        self.rush_started_at = Some(Instant::now());
+
+        let mut order: Vec<usize> = (0..CURATED_PUZZLES.len()).collect();
+        order.sort_by_key(|&i| CURATED_PUZZLES[i].rating);
+        self.rush_order = order;
+        self.rush_cursor = 0;
+
+        let first_idx = self.rush_order.first().copied().unwrap_or(0);
+        self.load_puzzle(first_idx);
+        let p = &CURATED_PUZZLES[first_idx];
+        self.status_message = format!(
+            "⚡ Rush started ({})! Solve fast — ELO {}!",
+            variant.label(),
+            p.rating
+        );
+        self.status_is_positive = true;
+    }
+
+    pub fn rush_remaining_secs(&self) -> f32 {
+        if let Some(started) = self.rush_started_at {
+            (180.0 - started.elapsed().as_secs_f32()).max(0.0)
+        } else {
+            180.0
+        }
+    }
+
+    pub fn advance_rush_puzzle(&mut self) {
+        if self.rush_order.is_empty() {
+            return;
+        }
+        self.rush_cursor = (self.rush_cursor + 1) % self.rush_order.len();
+        let next_idx = self.rush_order[self.rush_cursor];
+        self.load_puzzle(next_idx);
+    }
+
+    pub fn finish_rush(&mut self, profile: &mut UserProfile, reason: &str) {
+        self.rush_active = false;
+        self.rush_finished = true;
+        match self.rush_variant {
+            RushVariant::Timed3Min => {
+                if self.rush_score > profile.puzzle_rush_best_timed {
+                    profile.puzzle_rush_best_timed = self.rush_score;
+                    profile.save();
+                }
+            }
+            RushVariant::Survival => {
+                if self.rush_score > profile.puzzle_rush_best_survival {
+                    profile.puzzle_rush_best_survival = self.rush_score;
+                    profile.save();
+                }
+            }
+        }
+        self.status_message = format!("🏁 {reason} Final Score: {}", self.rush_score);
+        self.status_is_positive = self.rush_score > 0;
+    }
+
     pub fn open_blunder_deck(&mut self, profile: &UserProfile) {
         self.tab_mode = PuzzleTabMode::BlunderDeck;
         self.load_next_blunder(profile);
@@ -417,7 +522,19 @@ pub fn render_puzzles_page(
     config: &UserConfig,
 ) {
     let tokens = UiTokens::for_mode(config.dark_mode);
-    let puzzle = &CURATED_PUZZLES[trainer.current_idx];
+
+    // Tick 3-Minute Timed Puzzle Rush clock if active
+    if trainer.tab_mode == PuzzleTabMode::PuzzleRush
+        && trainer.rush_active
+        && trainer.rush_variant == RushVariant::Timed3Min
+    {
+        if trainer.rush_remaining_secs() <= 0.0 {
+            trainer.finish_rush(profile, "Time's Up!");
+        } else {
+            ui.ctx()
+                .request_repaint_after(Duration::from_millis(120));
+        }
+    }
 
     egui::SidePanel::right("puzzles_right_panel")
         .exact_width(380.0)
@@ -425,12 +542,12 @@ pub fn render_puzzles_page(
         .show_inside(ui, |ui| {
             ui.add_space(8.0);
 
-            // Tab Mode Switcher: Curated Tactics vs Personal Mistake Vault (Feature #5)
+            // Tab Mode Switcher: Curated Tactics vs Puzzle Rush (#20) vs Blunder Deck (#5)
             ui.horizontal(|ui| {
                 if ui
                     .selectable_label(
                         trainer.tab_mode == PuzzleTabMode::Curated,
-                        RichText::new("🧩 Curated (32)").strong().size(12.5),
+                        RichText::new("🧩 Curated").strong().size(12.0),
                     )
                     .clicked()
                 {
@@ -438,14 +555,23 @@ pub fn render_puzzles_page(
                     let idx = trainer.current_idx;
                     trainer.load_puzzle(idx);
                 }
+                if ui
+                    .selectable_label(
+                        trainer.tab_mode == PuzzleTabMode::PuzzleRush,
+                        RichText::new("⚡ Puzzle Rush").strong().size(12.0),
+                    )
+                    .clicked()
+                {
+                    trainer.open_puzzle_rush();
+                }
                 let vault_label = format!(
-                    "🔥 Blunder Deck ({})",
+                    "🔥 Blunders ({})",
                     profile.active_mistakes_count()
                 );
                 if ui
                     .selectable_label(
                         trainer.tab_mode == PuzzleTabMode::BlunderDeck,
-                        RichText::new(vault_label).strong().size(12.5),
+                        RichText::new(vault_label).strong().size(12.0),
                     )
                     .clicked()
                 {
@@ -454,6 +580,202 @@ pub fn render_puzzles_page(
             });
 
             ui.add_space(6.0);
+
+            if trainer.tab_mode == PuzzleTabMode::PuzzleRush {
+                let cur_p = &CURATED_PUZZLES[trainer.current_idx];
+                egui::Frame::none()
+                    .fill(tokens.bg_surface)
+                    .stroke(Stroke::new(1.5_f32, tokens.accent_gold))
+                    .rounding(Rounding::same(8.0_f32))
+                    .inner_margin(egui::Margin::same(12.0))
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(
+                            RichText::new("⚡ Puzzle Rush")
+                                .strong()
+                                .size(18.0)
+                                .color(tokens.text_primary),
+                        );
+                        ui.label(
+                            RichText::new(
+                                "Solve escalating tactics under pressure. 3 strikes and you're out!",
+                            )
+                            .size(11.5)
+                            .color(tokens.text_secondary),
+                        );
+                        ui.add_space(8.0);
+
+                        ui.horizontal(|ui| {
+                            ui.selectable_value(
+                                &mut trainer.rush_variant,
+                                RushVariant::Timed3Min,
+                                RushVariant::Timed3Min.label(),
+                            );
+                            ui.selectable_value(
+                                &mut trainer.rush_variant,
+                                RushVariant::Survival,
+                                RushVariant::Survival.label(),
+                            );
+                        });
+
+                        ui.add_space(8.0);
+
+                        // Score + Clock + Strikes HUD
+                        ui.horizontal(|ui| {
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new("SCORE")
+                                        .size(10.5)
+                                        .color(tokens.text_secondary),
+                                );
+                                ui.label(
+                                    RichText::new(format!("{}", trainer.rush_score))
+                                        .strong()
+                                        .size(30.0)
+                                        .color(tokens.accent_primary),
+                                );
+                            });
+
+                            ui.add_space(20.0);
+
+                            if trainer.rush_variant == RushVariant::Timed3Min {
+                                let rem = trainer.rush_remaining_secs();
+                                let mins = (rem as u32) / 60;
+                                let secs = (rem as u32) % 60;
+                                let time_col = if rem < 20.0 && trainer.rush_active {
+                                    Color32::from_rgb(0xE0, 0x4F, 0x44)
+                                } else {
+                                    tokens.text_primary
+                                };
+                                ui.vertical(|ui| {
+                                    ui.label(
+                                        RichText::new("TIME LEFT")
+                                            .size(10.5)
+                                            .color(tokens.text_secondary),
+                                    );
+                                    ui.label(
+                                        RichText::new(format!("{mins:02}:{secs:02}"))
+                                            .monospace()
+                                            .strong()
+                                            .size(26.0)
+                                            .color(time_col),
+                                    );
+                                });
+                            }
+
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let mut strikes_txt = String::new();
+                                    for i in 0..3u8 {
+                                        if i < trainer.rush_strikes {
+                                            strikes_txt.push_str("❌");
+                                        } else {
+                                            strikes_txt.push_str("⬜");
+                                        }
+                                    }
+                                    ui.label(RichText::new(strikes_txt).size(18.0));
+                                },
+                            );
+                        });
+
+                        ui.add_space(8.0);
+                        ui.label(
+                            RichText::new(format!(
+                                "Current Puzzle Target: ELO {}  •  #{}",
+                                cur_p.rating, cur_p.id
+                            ))
+                            .size(11.5)
+                            .color(tokens.accent_gold),
+                        );
+
+                        ui.add_space(8.0);
+                        let btn_text = if trainer.rush_active {
+                            "🔄 Restart Rush"
+                        } else {
+                            "▶ Start New Rush"
+                        };
+                        if ui
+                            .add_sized(
+                                [ui.available_width(), 36.0],
+                                egui::Button::new(
+                                    RichText::new(btn_text)
+                                        .strong()
+                                        .size(14.0)
+                                        .color(Color32::WHITE),
+                                )
+                                .fill(tokens.accent_primary),
+                            )
+                            .clicked()
+                        {
+                            let v = trainer.rush_variant;
+                            trainer.start_puzzle_rush(v);
+                        }
+                    });
+
+                ui.add_space(8.0);
+
+                egui::Frame::none()
+                    .fill(tokens.bg_surface)
+                    .stroke(Stroke::new(
+                        1.2_f32,
+                        if trainer.status_is_positive {
+                            tokens.accent_primary
+                        } else {
+                            Color32::from_rgb(0xE0, 0x4F, 0x44)
+                        },
+                    ))
+                    .rounding(Rounding::same(8.0_f32))
+                    .inner_margin(egui::Margin::same(10.0))
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(
+                            RichText::new(&trainer.status_message)
+                                .strong()
+                                .size(12.5)
+                                .color(tokens.text_primary),
+                        );
+                    });
+
+                ui.add_space(8.0);
+
+                egui::Frame::none()
+                    .fill(tokens.bg_surface)
+                    .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
+                    .rounding(Rounding::same(8.0_f32))
+                    .inner_margin(egui::Margin::same(10.0))
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(
+                            RichText::new("🏆 Personal Best Records")
+                                .strong()
+                                .size(13.5)
+                                .color(tokens.text_primary),
+                        );
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(format!(
+                                    "⏱ 3-Min Timed Best:  {}",
+                                    profile.puzzle_rush_best_timed
+                                ))
+                                .size(12.5)
+                                .color(tokens.accent_gold),
+                            );
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(format!(
+                                    "💀 Survival Best:     {}",
+                                    profile.puzzle_rush_best_survival
+                                ))
+                                .size(12.5)
+                                .color(tokens.accent_info),
+                            );
+                        });
+                    });
+                return;
+            }
 
             if trainer.tab_mode == PuzzleTabMode::BlunderDeck {
                 egui::Frame::none()
@@ -583,6 +905,8 @@ pub fn render_puzzles_page(
                     });
                 return;
             }
+
+            let puzzle = &CURATED_PUZZLES[trainer.current_idx];
 
             egui::Frame::none()
                 .fill(tokens.bg_surface)
@@ -787,7 +1111,12 @@ pub fn render_puzzles_page(
         ui.add_space(pad_y);
         ui.horizontal(|ui| {
             ui.add_space(pad_x);
-            if !trainer.solved_current && !trainer.failed_out_of_hearts {
+            let puzzle = &CURATED_PUZZLES[trainer.current_idx];
+            let can_interact = match trainer.tab_mode {
+                PuzzleTabMode::PuzzleRush => trainer.rush_active && !trainer.rush_finished,
+                _ => !trainer.solved_current && !trainer.failed_out_of_hearts,
+            };
+            if can_interact {
                 if let Some(mv) = trainer.board_ui.ui_with_config(
                     ui,
                     board_size,
@@ -874,21 +1203,58 @@ pub fn render_puzzles_page(
                         }
 
                         if trainer.step_idx >= puzzle.solution_uci.len() || is_mate_move {
-                            trainer.solved_current = true;
-                            profile.puzzles_solved += 1;
-                            profile.puzzle_streak += 1;
-                            profile.puzzle_rating = (profile.puzzle_rating + 15).min(3200);
-                            if trainer.current_idx == 0 {
-                                profile.daily_puzzle_completed = true;
+                            if trainer.tab_mode == PuzzleTabMode::PuzzleRush {
+                                trainer.rush_score += 1;
+                                match trainer.rush_variant {
+                                    RushVariant::Timed3Min => {
+                                        if trainer.rush_score > profile.puzzle_rush_best_timed {
+                                            profile.puzzle_rush_best_timed = trainer.rush_score;
+                                            profile.save();
+                                        }
+                                    }
+                                    RushVariant::Survival => {
+                                        if trainer.rush_score > profile.puzzle_rush_best_survival {
+                                            profile.puzzle_rush_best_survival = trainer.rush_score;
+                                            profile.save();
+                                        }
+                                    }
+                                }
+                                trainer.advance_rush_puzzle();
+                                let next_p = &CURATED_PUZZLES[trainer.current_idx];
+                                trainer.status_message = format!(
+                                    "⚡ +1 Point! Score: {} — Next Target ELO {}",
+                                    trainer.rush_score, next_p.rating
+                                );
+                                trainer.status_is_positive = true;
+                            } else {
+                                trainer.solved_current = true;
+                                profile.puzzles_solved += 1;
+                                profile.puzzle_streak += 1;
+                                profile.puzzle_rating = (profile.puzzle_rating + 15).min(3200);
+                                if trainer.current_idx == 0 {
+                                    profile.daily_puzzle_completed = true;
+                                }
+                                profile.save();
+                                trainer.status_message =
+                                    "✓ Puzzle Solved! +15 Puzzle Rating!".to_string();
+                                trainer.status_is_positive = true;
                             }
-                            profile.save();
-                            trainer.status_message =
-                                "✓ Puzzle Solved! +15 Puzzle Rating!".to_string();
-                            trainer.status_is_positive = true;
                         } else {
                             trainer.status_message =
                                 "✓ Great first move! Now find the finishing blow!".to_string();
                             trainer.status_is_positive = true;
+                        }
+                    } else if trainer.tab_mode == PuzzleTabMode::PuzzleRush {
+                        trainer.rush_strikes = trainer.rush_strikes.saturating_add(1);
+                        if trainer.rush_strikes >= 3 {
+                            trainer.finish_rush(profile, "3 Strikes — Rush Over!");
+                        } else {
+                            trainer.advance_rush_puzzle();
+                            trainer.status_message = format!(
+                                "❌ Strike {}/3! Skipping to next puzzle — stay sharp!",
+                                trainer.rush_strikes
+                            );
+                            trainer.status_is_positive = false;
                         }
                     } else {
                         let penalty = if trainer.hard_mode { 2 } else { 1 };

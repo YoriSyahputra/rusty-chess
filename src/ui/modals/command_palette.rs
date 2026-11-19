@@ -281,6 +281,16 @@ fn build_palette_items() -> Vec<PaletteItem> {
             cmd: PaletteCommand::OpenBlunderDeck,
         },
         PaletteItem {
+            label: "♔ Open Endgame Mastery Drills".into(),
+            category: "Training",
+            cmd: PaletteCommand::Navigate(ActiveRoute::Endgames),
+        },
+        PaletteItem {
+            label: "⚔ Open Bot vs. Bot Exhibition Arena".into(),
+            category: "Modes",
+            cmd: PaletteCommand::Navigate(ActiveRoute::Arena),
+        },
+        PaletteItem {
             label: "📊 Open Post-Game Review".into(),
             category: "Navigation",
             cmd: PaletteCommand::Navigate(ActiveRoute::Review),
