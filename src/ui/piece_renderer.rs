@@ -1,9 +1,8 @@
-use crate::engine::bot::BotId;
+use crate::{config::PieceSetStyle, engine::bot::BotId};
 use egui::{Color32, Painter, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use shakmaty::{Color, Role};
 
-/// Menggambar bidak catur vektor prosedural yang tajam (Staunton silhouette)
-/// lengkap dengan drop shadow, anti-aliased stroke, dan detail internal.
+/// Menggambar bidak catur vektor prosedural dengan gaya klasik default (`ClassicStaunton`).
 pub fn draw_chess_piece(
     painter: &Painter,
     center: Pos2,
@@ -12,37 +11,110 @@ pub fn draw_chess_piece(
     role: Role,
     is_dragged: bool,
 ) {
+    draw_chess_piece_styled(
+        painter,
+        center,
+        square_size,
+        color,
+        role,
+        is_dragged,
+        PieceSetStyle::ClassicStaunton,
+    );
+}
+
+/// Menggambar bidak catur vektor prosedural dalam 5 gaya pilihan (Feature #6):
+/// `ClassicStaunton`, `ChessComNeo`, `MinimalistAlpha`, `Pixel8Bit`, `NeonWireframe`.
+pub fn draw_chess_piece_styled(
+    painter: &Painter,
+    center: Pos2,
+    square_size: f32,
+    color: Color,
+    role: Role,
+    is_dragged: bool,
+    style: PieceSetStyle,
+) {
     let scale = if is_dragged {
         square_size * 1.15
     } else {
         square_size
     };
 
-    let (fill_color, inner_accent, outline_color) = match color {
-        Color::White => (
+    if style == PieceSetStyle::Pixel8Bit {
+        draw_pixel_8bit_piece(painter, center, scale, color, role, is_dragged);
+        return;
+    }
+
+    let (fill_color, inner_accent, outline_color, stroke_mult) = match (style, color) {
+        (PieceSetStyle::NeonWireframe, Color::White) => (
+            Color32::from_rgba_unmultiplied(0, 235, 255, 36),
+            Color32::from_rgb(120, 250, 255),
+            Color32::from_rgb(0, 235, 255),
+            1.15,
+        ),
+        (PieceSetStyle::NeonWireframe, Color::Black) => (
+            Color32::from_rgba_unmultiplied(255, 55, 185, 36),
+            Color32::from_rgb(255, 145, 225),
+            Color32::from_rgb(255, 55, 185),
+            1.15,
+        ),
+        (PieceSetStyle::ChessComNeo, Color::White) => (
+            Color32::from_rgb(255, 255, 255),
+            Color32::from_rgb(232, 232, 228),
+            Color32::from_rgb(45, 44, 42),
+            1.20,
+        ),
+        (PieceSetStyle::ChessComNeo, Color::Black) => (
+            Color32::from_rgb(56, 54, 51),
+            Color32::from_rgb(108, 105, 100),
+            Color32::from_rgb(22, 21, 20),
+            1.20,
+        ),
+        (PieceSetStyle::MinimalistAlpha, Color::White) => (
+            Color32::from_rgb(244, 242, 236),
+            Color32::TRANSPARENT,
+            Color32::from_rgb(52, 50, 48),
+            0.85,
+        ),
+        (PieceSetStyle::MinimalistAlpha, Color::Black) => (
+            Color32::from_rgb(34, 36, 40),
+            Color32::TRANSPARENT,
+            Color32::from_rgb(218, 216, 210),
+            0.75,
+        ),
+        (_, Color::White) => (
             Color32::from_rgb(248, 247, 242),
             Color32::from_rgb(218, 214, 202),
             Color32::from_rgb(32, 34, 38),
+            1.0,
         ),
-        Color::Black => (
+        (_, Color::Black) => (
             Color32::from_rgb(40, 43, 50),
             Color32::from_rgb(95, 102, 118),
             Color32::from_rgb(14, 15, 18),
+            1.0,
         ),
     };
 
-    let stroke_width = (scale * 0.032).clamp(1.4, 2.8);
+    let stroke_width = (scale * 0.032 * stroke_mult).clamp(1.3, 3.2);
     let outline = Stroke::new(stroke_width, outline_color);
-    let accent_stroke = Stroke::new((stroke_width * 0.85).max(1.1), inner_accent);
+    let accent_stroke = if inner_accent == Color32::TRANSPARENT {
+        Stroke::NONE
+    } else {
+        Stroke::new((stroke_width * 0.85).max(1.1), inner_accent)
+    };
 
-    // Drop shadow
+    // Drop shadow (neon glow halo for NeonWireframe)
     let shadow_offset = if is_dragged {
         Vec2::new(scale * 0.04, scale * 0.07)
     } else {
         Vec2::new(scale * 0.018, scale * 0.032)
     };
     let shadow_alpha = if is_dragged { 95 } else { 65 };
-    let shadow_color = Color32::from_rgba_unmultiplied(0, 0, 0, shadow_alpha);
+    let shadow_color = if style == PieceSetStyle::NeonWireframe {
+        outline_color.gamma_multiply(0.28)
+    } else {
+        Color32::from_rgba_unmultiplied(0, 0, 0, shadow_alpha)
+    };
 
     painter.circle_filled(
         Pos2::new(
@@ -76,6 +148,125 @@ pub fn draw_chess_piece(
             accent_stroke,
         ),
         Role::King => draw_king(painter, center, scale, fill_color, outline, accent_stroke),
+    }
+}
+
+/// Menggambar bidak catur bergaya Pixel 8-Bit retro (grid 10x10 prosedural).
+fn draw_pixel_8bit_piece(
+    painter: &Painter,
+    center: Pos2,
+    scale: f32,
+    color: Color,
+    role: Role,
+    is_dragged: bool,
+) {
+    let sprite: [&str; 10] = match role {
+        Role::Pawn => [
+            "..........",
+            "...####...",
+            "..######..",
+            "..######..",
+            "...####...",
+            "....##....",
+            "...####...",
+            "..######..",
+            ".########.",
+            "..........",
+        ],
+        Role::Rook => [
+            ".##.##.##.",
+            ".########.",
+            "..######..",
+            "...####...",
+            "...####...",
+            "...####...",
+            "..######..",
+            ".########.",
+            ".########.",
+            "..........",
+        ],
+        Role::Knight => [
+            "....###...",
+            "...#####..",
+            "..##.####.",
+            ".########.",
+            ".####..##.",
+            "....####..",
+            "...#####..",
+            "..######..",
+            ".########.",
+            "..........",
+        ],
+        Role::Bishop => [
+            "....##....",
+            "...####...",
+            "..##..##..",
+            "..######..",
+            "...####...",
+            "...####...",
+            "..######..",
+            ".########.",
+            ".########.",
+            "..........",
+        ],
+        Role::Queen => [
+            ".#..##..#.",
+            ".#.#..#.#.",
+            ".########.",
+            "..######..",
+            "..######..",
+            "...####...",
+            "..######..",
+            ".########.",
+            ".########.",
+            "..........",
+        ],
+        Role::King => [
+            "....##....",
+            "..######..",
+            "....##....",
+            ".###..###.",
+            ".########.",
+            "..######..",
+            "..######..",
+            ".########.",
+            ".########.",
+            "..........",
+        ],
+    };
+
+    let (fill, border) = match color {
+        Color::White => (Color32::from_rgb(248, 247, 240), Color32::from_rgb(28, 30, 34)),
+        Color::Black => (Color32::from_rgb(42, 44, 52), Color32::from_rgb(225, 225, 220)),
+    };
+
+    let cell = (scale * 0.78) / 10.0;
+    let origin = Pos2::new(center.x - cell * 5.0, center.y - cell * 5.0);
+    let shadow_off = if is_dragged { 3.0 } else { 1.5 };
+
+    for (row_idx, row_str) in sprite.iter().enumerate() {
+        for (col_idx, ch) in row_str.chars().enumerate() {
+            if ch == '#' {
+                let px_rect = Rect::from_min_size(
+                    Pos2::new(
+                        origin.x + col_idx as f32 * cell,
+                        origin.y + row_idx as f32 * cell,
+                    ),
+                    Vec2::splat(cell + 0.4),
+                );
+                painter.rect_filled(
+                    px_rect.translate(Vec2::splat(shadow_off)),
+                    Rounding::ZERO,
+                    Color32::from_rgba_unmultiplied(0, 0, 0, 80),
+                );
+                painter.rect(
+                    px_rect,
+                    Rounding::ZERO,
+                    fill,
+                    Stroke::new(0.8_f32, border),
+                );
+            }
+        }
     }
 }
 

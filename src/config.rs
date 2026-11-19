@@ -2,6 +2,37 @@ use crate::domain::TimeControl;
 use crate::ui::theme::BoardTheme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum PieceSetStyle {
+    ClassicStaunton,
+    ChessComNeo,
+    MinimalistAlpha,
+    Pixel8Bit,
+    NeonWireframe,
+}
+
+impl PieceSetStyle {
+    pub fn all() -> &'static [PieceSetStyle] {
+        &[
+            PieceSetStyle::ClassicStaunton,
+            PieceSetStyle::ChessComNeo,
+            PieceSetStyle::MinimalistAlpha,
+            PieceSetStyle::Pixel8Bit,
+            PieceSetStyle::NeonWireframe,
+        ]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            PieceSetStyle::ClassicStaunton => "Classic Staunton",
+            PieceSetStyle::ChessComNeo => "Chess.com Neo",
+            PieceSetStyle::MinimalistAlpha => "Minimalist Alpha",
+            PieceSetStyle::Pixel8Bit => "Pixel 8-Bit",
+            PieceSetStyle::NeonWireframe => "Neon Wireframe",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AnimationProfile {
     None,
     Fast,
@@ -167,6 +198,8 @@ pub struct UserConfig {
     pub dark_mode: bool,
     pub sidebar_collapsed: Option<bool>,
     pub board_theme: BoardTheme,
+    pub piece_set: PieceSetStyle,
+    pub textured_board: bool,
     pub animation_profile: AnimationProfile,
     pub move_input_method: MoveInputMethod,
     pub enable_premoves: bool,
@@ -187,6 +220,8 @@ impl Default for UserConfig {
             dark_mode: true,
             sidebar_collapsed: None,
             board_theme: BoardTheme::ClassicGreen,
+            piece_set: PieceSetStyle::ClassicStaunton,
+            textured_board: true,
             animation_profile: AnimationProfile::Medium,
             move_input_method: MoveInputMethod::DragOrClick,
             enable_premoves: true,

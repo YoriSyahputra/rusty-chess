@@ -12,7 +12,7 @@ use crate::{
 };
 use egui::{Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Sense, Stroke, Ui, Vec2};
 
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct ReviewViewState {
     pub report: Option<GameReviewReport>,
     pub analyzed_plies_count: usize,

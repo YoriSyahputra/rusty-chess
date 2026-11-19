@@ -2,13 +2,14 @@ use crate::{
     config::{MoveInputMethod, UserConfig},
     domain::{AnnotationColor, ChessMatchState, MarkedSquare, PlayerController, TacticalArrow},
     ui::{
+        board_textures::BoardTextureCache,
         board_view::{
             animation::BoardAnimationLayer,
             grid::{pos_to_square, render_board_grid_ext},
             heatmap::render_xray_heatmap,
             promotion_popup::{show_promotion_popup, PendingPromotion, PromotionChoice},
         },
-        piece_renderer::draw_chess_piece,
+        piece_renderer::draw_chess_piece_styled,
         theme::BoardTheme,
     },
 };
@@ -22,7 +23,7 @@ pub struct QueuedPremove {
     pub promotion: Option<Role>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct BoardInteractionState {
     pub selected_square: Option<Square>,
     pub dragging_from: Option<Square>,
@@ -35,6 +36,7 @@ pub struct BoardInteractionState {
     pub threat_arrow: Option<TacticalArrow>,
     pub queued_premove: Option<QueuedPremove>,
     pub anim_layer: BoardAnimationLayer,
+    pub texture_cache: BoardTextureCache,
 }
 
 impl BoardInteractionState {
@@ -164,6 +166,16 @@ impl BoardInteractionState {
             combined_arrows.push(threat);
         }
 
+        let tex_id = if config.textured_board {
+            Some(
+                self.texture_cache
+                    .get_or_create(ui.ctx(), config.board_theme)
+                    .id(),
+            )
+        } else {
+            None
+        };
+
         render_board_grid_ext(
             &painter,
             board_rect,
@@ -181,6 +193,8 @@ impl BoardInteractionState {
             self.hint_arrow,
             self.dragging_from,
             &hidden_squares,
+            config.piece_set,
+            tex_id,
         );
 
         // Render X-Ray Square Control Heatmap Overlay when enabled (Feature #2)
@@ -190,19 +204,20 @@ impl BoardInteractionState {
 
         // Render active piece slide animations, capture fades, snap-backs, check pulses & King result badges
         self.anim_layer
-            .render_animations(&painter, board_rect, flipped);
+            .render_animations(&painter, board_rect, flipped, config.piece_set);
 
         // Render dragged piece following cursor (1.15x with drop shadow)
         if let (Some(drag_sq), Some(cursor_pos)) = (self.dragging_from, self.drag_pos) {
             if let Some(piece) = displayed_pos.board().piece_at(drag_sq) {
                 let sq_size = board_rect.width() / 8.0;
-                draw_chess_piece(
+                draw_chess_piece_styled(
                     &painter,
                     cursor_pos,
                     sq_size,
                     piece.color,
                     piece.role,
                     true,
+                    config.piece_set,
                 );
             }
         }

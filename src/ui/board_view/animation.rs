@@ -1,7 +1,7 @@
 use crate::{
-    config::AnimationProfile,
+    config::{AnimationProfile, PieceSetStyle},
     domain::GameOutcome,
-    ui::{board_view::grid::square_to_rect, piece_renderer::draw_chess_piece},
+    ui::{board_view::grid::square_to_rect, piece_renderer::draw_chess_piece_styled},
 };
 use egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Stroke, Vec2};
 use shakmaty::{Chess, Color, File, Move, Position, Role, Square};
@@ -294,6 +294,7 @@ impl BoardAnimationLayer {
         painter: &Painter,
         board_rect: Rect,
         flipped: bool,
+        piece_set: PieceSetStyle,
     ) {
         let now = Instant::now();
         let sq_size = board_rect.width() / 8.0;
@@ -319,13 +320,14 @@ impl BoardAnimationLayer {
             let t = (elapsed / (fade.duration_ms.max(1) as f32)).clamp(0.0, 1.0);
             let shrink_scale = sq_size * (1.0 - t * 0.35);
             let sq_rect = square_to_rect(board_rect, fade.square, flipped);
-            draw_chess_piece(
+            draw_chess_piece_styled(
                 painter,
                 sq_rect.center(),
                 shrink_scale,
                 fade.color,
                 fade.role,
                 false,
+                piece_set,
             );
         }
 
@@ -339,13 +341,14 @@ impl BoardAnimationLayer {
             let to_c = square_to_rect(board_rect, slide.to, flipped).center();
             let pos = from_c + (to_c - from_c) * eased_t;
 
-            draw_chess_piece(
+            draw_chess_piece_styled(
                 painter,
                 pos,
                 sq_size * lift_scale,
                 slide.color,
                 slide.role,
                 lift_scale > 1.02,
+                piece_set,
             );
         }
 
@@ -357,7 +360,7 @@ impl BoardAnimationLayer {
             let from_c = square_to_rect(board_rect, snap.from, flipped).center();
             let to_c = square_to_rect(board_rect, snap.to, flipped).center();
             let pos = from_c + (to_c - from_c) * eased_t;
-            draw_chess_piece(painter, pos, sq_size, snap.color, snap.role, false);
+            draw_chess_piece_styled(painter, pos, sq_size, snap.color, snap.role, false, piece_set);
         }
 
         // 5. End-of-game King result badges

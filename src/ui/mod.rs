@@ -1,3 +1,4 @@
+pub mod board_textures;
 pub mod board_view;
 pub mod eval_bar;
 pub mod modals;

@@ -282,7 +282,6 @@ pub enum PuzzleTabMode {
     BlunderDeck,
 }
 
-#[derive(Debug, Clone)]
 pub struct PuzzlesTrainerState {
     pub tab_mode: PuzzleTabMode,
     pub current_idx: usize,

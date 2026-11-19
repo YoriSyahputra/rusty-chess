@@ -1,8 +1,8 @@
 use crate::{
     audio::{AudioEngine, SoundEffect},
     config::{
-        AnimationProfile, AssistanceMode, MoveInputMethod, NotationStyle, PlayColorChoice,
-        UserConfig,
+        AnimationProfile, AssistanceMode, MoveInputMethod, NotationStyle, PieceSetStyle,
+        PlayColorChoice, UserConfig,
     },
     domain::{
         detect_opening_from_records, format_fen, AnnotationColor, ChessMatchState, Color,
@@ -697,6 +697,22 @@ impl RustyChessApp {
                             }
                         });
                 });
+
+                ui.horizontal(|ui| {
+                    ui.label("Piece Set:");
+                    egui::ComboBox::from_id_salt("settings_piece_set")
+                        .selected_text(self.config.piece_set.label())
+                        .show_ui(ui, |ui| {
+                            for &ps in PieceSetStyle::all() {
+                                ui.selectable_value(&mut self.config.piece_set, ps, ps.label());
+                            }
+                        });
+                });
+
+                ui.checkbox(
+                    &mut self.config.textured_board,
+                    "Procedural Textured Board Surface (Wood / Linen / Slate / Ice)",
+                );
 
                 ui.horizontal(|ui| {
                     ui.label("Animation Speed:");

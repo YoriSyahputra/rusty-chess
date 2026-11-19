@@ -1,6 +1,7 @@
 use crate::{
+    config::PieceSetStyle,
     domain::{AnnotationColor, MarkedSquare, TacticalArrow},
-    ui::{piece_renderer::draw_chess_piece, theme::BoardPalette},
+    ui::{piece_renderer::draw_chess_piece_styled, theme::BoardPalette},
 };
 use egui::{Align2, Color32, FontId, Painter, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use shakmaty::{Chess, File, Move, Position, Rank, Square};
@@ -89,6 +90,8 @@ pub fn render_board_grid(
         hint_arrow,
         dragged_from,
         &[],
+        PieceSetStyle::ClassicStaunton,
+        None,
     );
 }
 
@@ -110,6 +113,8 @@ pub fn render_board_grid_ext(
     hint_arrow: Option<TacticalArrow>,
     dragged_from: Option<Square>,
     hidden_squares: &[Square],
+    piece_set: PieceSetStyle,
+    surface_texture_id: Option<egui::TextureId>,
 ) {
     let sq_size = board_rect.width() / 8.0;
     let board = pos.board();
@@ -178,6 +183,12 @@ pub fn render_board_grid_ext(
         }
     }
 
+    // 1b. Cached procedural board surface texture overlay (Feature #7)
+    if let Some(tex_id) = surface_texture_id {
+        let uv = Rect::from_min_max(Pos2::new(0.0, 0.0), Pos2::new(2.0, 2.0));
+        painter.image(tex_id, board_rect, uv, Color32::WHITE);
+    }
+
     // 2. Render koordinat A-H dan 1-8 di tepi papan
     if show_coordinates {
         let font = FontId::proportional((sq_size * 0.165).clamp(9.5, 14.0));
@@ -234,13 +245,14 @@ pub fn render_board_grid_ext(
         }
         if let Some(piece) = board.piece_at(sq) {
             let sq_rect = square_to_rect(board_rect, sq, flipped);
-            draw_chess_piece(
+            draw_chess_piece_styled(
                 painter,
                 sq_rect.center(),
                 sq_size,
                 piece.color,
                 piece.role,
                 false,
+                piece_set,
             );
         }
     }
