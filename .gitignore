@@ -1,6 +1,7 @@
 /target
 /build-deb
-*.deb
+/*.deb
+!releases/*.deb
 *.swp
 *~
 .DS_Store

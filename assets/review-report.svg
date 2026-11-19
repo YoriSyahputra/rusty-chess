@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 440" width="100%" height="440">
+  <defs>
+    <linearGradient id="panelBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#282623"/>
+      <stop offset="100%" stop-color="#1E1C1A"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1100" height="440" rx="18" fill="url(#panelBg)" stroke="#47443F" stroke-width="2"/>
+
+  <!-- Left Card: 1:1 Chess.com Classification Breakdown Report -->
+  <g transform="translate(24, 22)">
+    <rect x="0" y="0" width="510" height="396" rx="14" fill="#302E2B" stroke="#47443F" stroke-width="1.2"/>
+    <text x="255" y="32" text-anchor="middle" fill="#FFFFFF" font-family="system-ui, sans-serif" font-size="18" font-weight="800">📊 1:1 Chess.com Game Review Report</text>
+
+    <!-- Accuracy Columns -->
+    <rect x="28" y="48" width="210" height="58" rx="9" fill="#24221F" stroke="#81B64C" stroke-width="1.2"/>
+    <text x="133" y="68" text-anchor="middle" fill="#B0ACA6" font-family="system-ui, sans-serif" font-size="12" font-weight="700">⬜ WHITE (YOU)</text>
+    <text x="133" y="95" text-anchor="middle" fill="#95C95D" font-family="system-ui, sans-serif" font-size="23" font-weight="900">92.4%  <tspan fill="#FFAA00" font-size="13">ELO 2540</tspan></text>
+
+    <rect x="272" y="48" width="210" height="58" rx="9" fill="#24221F" stroke="#5B9BD5" stroke-width="1.2"/>
+    <text x="377" y="68" text-anchor="middle" fill="#B0ACA6" font-family="system-ui, sans-serif" font-size="12" font-weight="700">⬛ BLACK (SVEN 1100)</text>
+    <text x="377" y="95" text-anchor="middle" fill="#5B9BD5" font-family="system-ui, sans-serif" font-size="23" font-weight="900">78.6%  <tspan fill="#FFAA00" font-size="13">ELO 1150</tspan></text>
+
+    <!-- 9 Classification Rows -->
+    <g transform="translate(46, 126)" font-family="system-ui, sans-serif" font-size="14" font-weight="700">
+      <!-- Row 1: Brilliant -->
+      <text x="20" y="16" text-anchor="middle" fill="#1BACA6">2</text>
+      <circle cx="155" cy="11" r="11" fill="#1BACA6"/><text x="155" y="15" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="900">!!</text>
+      <text x="178" y="16" fill="#F2F0EC">Brilliant</text>
+      <text x="398" y="16" text-anchor="middle" fill="#1BACA6">0</text>
+
+      <!-- Row 2: Best Move -->
+      <text x="20" y="42" text-anchor="middle" fill="#81B64C">14</text>
+      <circle cx="155" cy="37" r="11" fill="#81B64C"/><text x="155" y="41" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="900">★</text>
+      <text x="178" y="42" fill="#F2F0EC">Best Move</text>
+      <text x="398" y="42" text-anchor="middle" fill="#81B64C">8</text>
+
+      <!-- Row 3: Excellent -->
+      <text x="20" y="68" text-anchor="middle" fill="#5B9BD5">9</text>
+      <circle cx="155" cy="63" r="11" fill="#5B9BD5"/><text x="155" y="67" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="900">✓</text>
+      <text x="178" y="68" fill="#F2F0EC">Excellent</text>
+      <text x="398" y="68" text-anchor="middle" fill="#5B9BD5">7</text>
+
+      <!-- Row 4: Good -->
+      <text x="20" y="94" text-anchor="middle" fill="#929894">3</text>
+      <circle cx="155" cy="89" r="11" fill="#929894"/><text x="155" y="93" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="900">○</text>
+      <text x="178" y="94" fill="#F2F0EC">Good</text>
+      <text x="398" y="94" text-anchor="middle" fill="#929894">5</text>
+
+      <!-- Row 5: Book Move -->
+      <text x="20" y="120" text-anchor="middle" fill="#A88865">4</text>
+      <circle cx="155" cy="115" r="11" fill="#A88865"/><text x="155" y="119" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="900">B</text>
+      <text x="178" y="120" fill="#F2F0EC">Book Move</text>
+      <text x="398" y="120" text-anchor="middle" fill="#A88865">4</text>
+
+      <!-- Row 6: Inaccuracy -->
+      <text x="20" y="146" text-anchor="middle" fill="#F7C631">1</text>
+      <circle cx="155" cy="141" r="11" fill="#F7C631"/><text x="155" y="145" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="900">?!</text>
+      <text x="178" y="146" fill="#F2F0EC">Inaccuracy</text>
+      <text x="398" y="146" text-anchor="middle" fill="#F7C631">3</text>
+
+      <!-- Row 7: Mistake -->
+      <text x="20" y="172" text-anchor="middle" fill="#E68A2E">0</text>
+      <circle cx="155" cy="167" r="11" fill="#E68A2E"/><text x="155" y="171" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="900">?</text>
+      <text x="178" y="172" fill="#F2F0EC">Mistake</text>
+      <text x="398" y="172" text-anchor="middle" fill="#E68A2E">2</text>
+
+      <!-- Row 8: Blunder -->
+      <text x="20" y="198" text-anchor="middle" fill="#CA3431">0</text>
+      <circle cx="155" cy="193" r="11" fill="#CA3431"/><text x="155" y="197" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="900">??</text>
+      <text x="178" y="198" fill="#F2F0EC">Blunder</text>
+      <text x="398" y="198" text-anchor="middle" fill="#CA3431">1</text>
+
+      <!-- Row 9: Missed Win -->
+      <text x="20" y="224" text-anchor="middle" fill="#E04F44">0</text>
+      <circle cx="155" cy="219" r="11" fill="#E04F44"/><text x="155" y="223" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="900">✕</text>
+      <text x="178" y="224" fill="#F2F0EC">Missed Win</text>
+      <text x="398" y="224" text-anchor="middle" fill="#E04F44">0</text>
+    </g>
+
+    <line x1="36" y1="362" x2="474" y2="362" stroke="#47443F" stroke-width="1"/>
+    <text x="255" y="384" text-anchor="middle" fill="#B0ACA6" font-family="system-ui, sans-serif" font-size="13" font-weight="700">▲ DOMINANT — Clinical victory. You controlled the board from start to finish.</text>
+  </g>
+
+  <!-- Right Card: Hexagonal "Your Chess DNA" Radar Chart & Spaced-Repetition Blunder Vault -->
+  <g transform="translate(556, 22)">
+    <rect x="0" y="0" width="520" height="396" rx="14" fill="#302E2B" stroke="#47443F" stroke-width="1.2"/>
+    <text x="260" y="32" text-anchor="middle" fill="#FFFFFF" font-family="system-ui, sans-serif" font-size="18" font-weight="800">📈 "Your Chess DNA" 6-Axis Skill Radar</text>
+    <text x="260" y="52" text-anchor="middle" fill="#FFAA00" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Archetype: Tactical Assassin • 3-Streak Blunder Mastery</text>
+
+    <!-- Hexagonal Radar Grid Centered at (260, 215), R=120 -->
+    <g transform="translate(260, 218)">
+      <!-- Outer Hexagon -->
+      <polygon points="0,-120 104,-60 104,60 0,120 -104,60 -104,-60" fill="#22201E" stroke="#4D4943" stroke-width="1.5"/>
+      <!-- Mid Hexagon -->
+      <polygon points="0,-80 69,-40 69,40 0,80 -69,40 -69,-40" fill="none" stroke="#3D3A35" stroke-width="1" stroke-dasharray="4,3"/>
+      <!-- Inner Hexagon -->
+      <polygon points="0,-40 35,-20 35,20 0,40 -35,20 -35,-20" fill="none" stroke="#3D3A35" stroke-width="1"/>
+
+      <!-- Spokes -->
+      <line x1="0" y1="-120" x2="0" y2="120" stroke="#3D3A35" stroke-width="1"/>
+      <line x1="-104" y1="-60" x2="104" y2="60" stroke="#3D3A35" stroke-width="1"/>
+      <line x1="-104" y1="60" x2="104" y2="-60" stroke="#3D3A35" stroke-width="1"/>
+
+      <!-- Player Skill Polygon -->
+      <polygon points="0,-102 96,-55 78,45 0,94 -88,51 -76,-44" fill="#81B64C" fill-opacity="0.34" stroke="#95C95D" stroke-width="2.8"/>
+
+      <!-- Vertex Dots -->
+      <circle cx="0" cy="-102" r="5" fill="#95C95D"/>
+      <circle cx="96" cy="-55" r="5" fill="#95C95D"/>
+      <circle cx="78" cy="45" r="5" fill="#95C95D"/>
+      <circle cx="0" cy="94" r="5" fill="#95C95D"/>
+      <circle cx="-88" cy="51" r="5" fill="#95C95D"/>
+      <circle cx="-76" cy="-44" r="5" fill="#95C95D"/>
+
+      <!-- Axis Labels -->
+      <text x="0" y="-132" text-anchor="middle" fill="#F2F0EC" font-family="system-ui, sans-serif" font-size="12.5" font-weight="700">Opening (86%)</text>
+      <text x="118" y="-58" text-anchor="start" fill="#95C95D" font-family="system-ui, sans-serif" font-size="12.5" font-weight="700">Tactics (93%)</text>
+      <text x="118" y="64" text-anchor="start" fill="#F2F0EC" font-family="system-ui, sans-serif" font-size="12.5" font-weight="700">Endgame (78%)</text>
+      <text x="0" y="142" text-anchor="middle" fill="#F2F0EC" font-family="system-ui, sans-serif" font-size="12.5" font-weight="700">Time Mgmt (81%)</text>
+      <text x="-118" y="64" text-anchor="end" fill="#FFAA00" font-family="system-ui, sans-serif" font-size="12.5" font-weight="700">Attack (89%)</text>
+      <text x="-118" y="-58" text-anchor="end" fill="#F2F0EC" font-family="system-ui, sans-serif" font-size="12.5" font-weight="700">Resilience (76%)</text>
+    </g>
+  </g>
+</svg>
