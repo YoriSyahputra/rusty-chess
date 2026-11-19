@@ -22,8 +22,9 @@ use crate::{
         eval_bar::EvalBarState,
         modals::show_game_over_modal,
         pages::{
-            render_bots_lobby, render_home_page, render_play_hub, render_puzzles_page,
-            render_review_page, BotsLobbyState, PuzzlesTrainerState, ReviewViewState,
+            render_analytics_page, render_bots_lobby, render_home_page, render_play_hub,
+            render_puzzles_page, render_review_page, BotsLobbyState, PuzzlesTrainerState,
+            ReviewViewState,
         },
         side_panel::{render_player_strip, render_side_panel, show_bot_selector_modal},
         sidebar::{render_left_sidebar, ActiveRoute},
@@ -646,6 +647,9 @@ impl RustyChessApp {
             if i.key_pressed(Key::F) {
                 self.config.board_flipped = !self.config.board_flipped;
             }
+            if i.key_pressed(Key::X) {
+                self.config.show_xray_heatmap = !self.config.show_xray_heatmap;
+            }
         });
     }
 
@@ -742,6 +746,10 @@ impl RustyChessApp {
                 ui.checkbox(
                     &mut self.config.show_coordinates,
                     "Show Board Coordinates (A–H / 1–8)",
+                );
+                ui.checkbox(
+                    &mut self.config.show_xray_heatmap,
+                    "X-Ray Square Control & Hanging Piece Heatmap (X)",
                 );
                 ui.checkbox(&mut self.config.sound_enabled, "Enable Sound Effects");
 
@@ -1045,6 +1053,19 @@ impl eframe::App for RustyChessApp {
                         &mut self.profile,
                         &self.config,
                     );
+                });
+            }
+
+            ActiveRoute::Analytics => {
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    let analytics_actions =
+                        render_analytics_page(ui, &self.profile, self.config.dark_mode);
+                    if analytics_actions.open_blunder_deck {
+                        self.puzzles_state.open_blunder_deck(&self.profile);
+                    }
+                    if let Some(r) = analytics_actions.navigate_to {
+                        self.active_route = r;
+                    }
                 });
             }
 

@@ -83,17 +83,22 @@ pub fn render_home_page(
                                             .color(tokens.accent_gold),
                                         );
                                         ui.add_space(12.0);
+                                        let dna = profile.compute_skill_dna();
                                         ui.label(
                                             RichText::new(format!(
-                                                "Record: {}W - {}D - {}L   |   🧩 Puzzle Rating: {}",
+                                                "Record: {}W - {}D - {}L   |   🧩 Puzzle: {}   |   🧬 DNA: {}",
                                                 profile.wins,
                                                 profile.draws,
                                                 profile.losses,
-                                                profile.puzzle_rating
+                                                profile.puzzle_rating,
+                                                dna.archetype
                                             ))
                                             .size(12.5)
                                             .color(tokens.text_secondary),
                                         );
+                                        if ui.small_button("📈 View Insights").clicked() {
+                                            actions.navigate_to = Some(ActiveRoute::Analytics);
+                                        }
                                     });
 
                                     let bar_w = (ui.available_width() - 16.0).clamp(240.0, 520.0);

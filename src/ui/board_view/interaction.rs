@@ -5,6 +5,7 @@ use crate::{
         board_view::{
             animation::BoardAnimationLayer,
             grid::{pos_to_square, render_board_grid_ext},
+            heatmap::render_xray_heatmap,
             promotion_popup::{show_promotion_popup, PendingPromotion, PromotionChoice},
         },
         piece_renderer::draw_chess_piece,
@@ -181,6 +182,11 @@ impl BoardInteractionState {
             self.dragging_from,
             &hidden_squares,
         );
+
+        // Render X-Ray Square Control Heatmap Overlay when enabled (Feature #2)
+        if config.show_xray_heatmap {
+            render_xray_heatmap(&painter, board_rect, &displayed_pos, flipped);
+        }
 
         // Render active piece slide animations, capture fades, snap-backs, check pulses & King result badges
         self.anim_layer

@@ -1,9 +1,12 @@
 use crate::{
     config::UserConfig,
-    domain::{format_uci, parse_fen, AnnotationColor, ChessMatchState, Color, TacticalArrow},
+    domain::{
+        detect_opening_from_records, format_uci, parse_fen, AnnotationColor, ChessMatchState,
+        Color, TacticalArrow,
+    },
     engine::review::{analyze_match_review, GameReviewReport, MoveClassification},
     ui::{
-        board_view::{render_board_grid, BoardInteractionState},
+        board_view::{render_board_grid, render_xray_heatmap, BoardInteractionState},
         theme::UiTokens,
     },
 };
@@ -72,6 +75,16 @@ pub fn render_review_page(
                             .size(15.5)
                             .color(tokens.text_primary),
                     );
+                    if let Some(op) = detect_opening_from_records(&match_state.history) {
+                        ui.label(
+                            RichText::new(format!(
+                                "📖 {} • {} (Book through ply {})",
+                                op.eco, op.name, op.matched_plies
+                            ))
+                            .size(11.5)
+                            .color(tokens.accent_gold),
+                        );
+                    }
                     ui.add_space(6.0);
 
                     ui.columns(2, |cols| {
@@ -190,6 +203,73 @@ pub fn render_review_page(
                                 review_state.retry_mode_active = false;
                             }
                         }
+                    }
+
+                    // Feature #4: Move-by-Move Clock Usage vs. Accuracy Dual Chart
+                    ui.add_space(4.0);
+                    let time_h = 34.0;
+                    let (t_rect, t_resp) =
+                        ui.allocate_exact_size(Vec2::new(graph_w, time_h), Sense::click());
+                    let t_painter = ui.painter_at(t_rect);
+                    t_painter.rect_filled(
+                        t_rect,
+                        Rounding::same(3.0_f32),
+                        Color32::from_rgb(0x1C, 0x1A, 0x18),
+                    );
+
+                    if !report.entries.is_empty() {
+                        let n = report.entries.len().max(1);
+                        let max_ms = match_state
+                            .history
+                            .iter()
+                            .map(|r| r.time_spent_ms)
+                            .max()
+                            .unwrap_or(1000)
+                            .max(500) as f32;
+                        let bar_w = (t_rect.width() / n as f32).clamp(2.0, 14.0);
+
+                        for (idx, entry) in report.entries.iter().enumerate() {
+                            let ms = match_state
+                                .history
+                                .get(idx)
+                                .map(|r| r.time_spent_ms)
+                                .unwrap_or(0) as f32;
+                            let h = ((ms / max_ms).clamp(0.08, 1.0)) * (t_rect.height() - 4.0);
+                            let x = t_rect.min.x + (idx as f32 / n as f32) * t_rect.width();
+                            let bar_rect = Rect::from_min_max(
+                                Pos2::new(x, t_rect.max.y - h),
+                                Pos2::new((x + bar_w - 1.0).max(x + 1.0), t_rect.max.y),
+                            );
+                            let rgb = entry.classification.rgb();
+                            let col = Color32::from_rgb(rgb[0], rgb[1], rgb[2]);
+                            t_painter.rect_filled(bar_rect, Rounding::same(1.0_f32), col);
+                        }
+
+                        if t_resp.clicked() {
+                            if let Some(pos) = t_resp.interact_pointer_pos() {
+                                let ratio =
+                                    ((pos.x - t_rect.min.x) / t_rect.width()).clamp(0.0, 1.0);
+                                let ply = ((ratio * n as f32).floor() as usize + 1).clamp(1, n);
+                                review_state.selected_ply = ply;
+                                match_state.jump_to_ply(ply);
+                                review_state.retry_mode_active = false;
+                            }
+                        }
+
+                        let sel_ms = match_state
+                            .history
+                            .get(review_state.selected_ply.saturating_sub(1))
+                            .map(|r| r.time_spent_ms)
+                            .unwrap_or(0);
+                        ui.label(
+                            RichText::new(format!(
+                                "⏱ Move Time Chart  •  Ply {} spent {:.1}s",
+                                review_state.selected_ply,
+                                sel_ms as f32 / 1000.0
+                            ))
+                            .size(10.5)
+                            .color(tokens.text_secondary),
+                        );
                     }
                 });
 
@@ -502,6 +582,9 @@ pub fn render_review_page(
                 best_arrow,
                 None,
             );
+            if config.show_xray_heatmap {
+                render_xray_heatmap(ui.painter(), b_rect, &display_pos, config.board_flipped);
+            }
         });
     });
 }

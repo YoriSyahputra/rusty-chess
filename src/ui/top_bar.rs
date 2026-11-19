@@ -89,6 +89,25 @@ pub fn render_top_bar(
             config.sound_enabled = !config.sound_enabled;
         }
 
+        let xray_label = if config.show_xray_heatmap {
+            "👁 X-Ray: ON"
+        } else {
+            "👁 X-Ray"
+        };
+        if ui
+            .button(RichText::new(xray_label).size(12.5).color(
+                if config.show_xray_heatmap {
+                    Color32::from_rgb(0x00, 0x9F, 0xD9)
+                } else {
+                    Color32::from_rgb(230, 234, 242)
+                },
+            ))
+            .on_hover_text("Toggle X-Ray Square Control & Hanging Piece Heatmap (Shortcut: X)")
+            .clicked()
+        {
+            config.show_xray_heatmap = !config.show_xray_heatmap;
+        }
+
         if ui
             .button(RichText::new("📋 FEN / PGN").size(12.5))
             .on_hover_text("Ekspor atau impor posisi FEN & riwayat PGN")

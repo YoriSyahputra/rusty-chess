@@ -13,6 +13,7 @@ pub enum ActiveRoute {
     Match,
     Puzzles,
     Review,
+    Analytics,
 }
 
 #[derive(Debug, Default)]
@@ -80,6 +81,7 @@ pub fn render_left_sidebar(
             (ActiveRoute::PlayBots, "🤖", "Bots"),
             (ActiveRoute::Puzzles, "🧩", "Puzzles"),
             (ActiveRoute::Review, "📊", "Review"),
+            (ActiveRoute::Analytics, "📈", "Insights"),
         ];
 
         for (route, icon, label) in nav_items {

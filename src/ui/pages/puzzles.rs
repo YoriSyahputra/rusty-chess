@@ -276,9 +276,17 @@ pub const CURATED_PUZZLES: &[TacticalPuzzle] = &[
     },
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PuzzleTabMode {
+    Curated,
+    BlunderDeck,
+}
+
 #[derive(Debug, Clone)]
 pub struct PuzzlesTrainerState {
+    pub tab_mode: PuzzleTabMode,
     pub current_idx: usize,
+    pub active_mistake_id: Option<u64>,
     pub step_idx: usize,
     pub hearts: u8,
     pub max_hearts: u8,
@@ -294,7 +302,9 @@ pub struct PuzzlesTrainerState {
 impl Default for PuzzlesTrainerState {
     fn default() -> Self {
         let mut s = Self {
+            tab_mode: PuzzleTabMode::Curated,
             current_idx: 0,
+            active_mistake_id: None,
             step_idx: 0,
             hearts: 5,
             max_hearts: 5,
@@ -312,6 +322,67 @@ impl Default for PuzzlesTrainerState {
 }
 
 impl PuzzlesTrainerState {
+    pub fn open_blunder_deck(&mut self, profile: &UserProfile) {
+        self.tab_mode = PuzzleTabMode::BlunderDeck;
+        self.load_next_blunder(profile);
+    }
+
+    pub fn load_next_blunder(&mut self, profile: &UserProfile) {
+        self.solved_current = false;
+        self.step_idx = 0;
+        let next_entry = profile
+            .mistake_vault
+            .iter()
+            .find(|m| !m.is_mastered())
+            .or_else(|| profile.mistake_vault.first());
+
+        if let Some(entry) = next_entry {
+            self.active_mistake_id = Some(entry.id);
+            let side = if entry.side_is_white {
+                Color::White
+            } else {
+                Color::Black
+            };
+            if let Ok(state) = ChessMatchState::from_fen(&entry.fen, side) {
+                self.board_state = state;
+            }
+            self.board_ui.reset();
+            self.status_message = format!(
+                "Blunder vs {}: You played {}. Find the better move! (Mastery {}/3)",
+                entry.opponent_name, entry.played_san, entry.mastery_streak
+            );
+            self.status_is_positive = true;
+        } else {
+            self.active_mistake_id = None;
+            self.status_message =
+                "Mistake Vault is empty! Complete matches to auto-harvest your blunders."
+                    .to_string();
+            self.status_is_positive = true;
+        }
+    }
+
+    pub fn load_mistake_by_id(&mut self, profile: &UserProfile, id: u64) {
+        if let Some(entry) = profile.mistake_vault.iter().find(|m| m.id == id) {
+            self.tab_mode = PuzzleTabMode::BlunderDeck;
+            self.active_mistake_id = Some(entry.id);
+            self.solved_current = false;
+            self.step_idx = 0;
+            let side = if entry.side_is_white {
+                Color::White
+            } else {
+                Color::Black
+            };
+            if let Ok(state) = ChessMatchState::from_fen(&entry.fen, side) {
+                self.board_state = state;
+            }
+            self.board_ui.reset();
+            self.status_message = format!(
+                "Blunder vs {}: You played {}. Find the best move! (Mastery {}/3)",
+                entry.opponent_name, entry.played_san, entry.mastery_streak
+            );
+            self.status_is_positive = true;
+        }
+    }
     pub fn load_puzzle(&mut self, idx: usize) {
         let clamped = idx % CURATED_PUZZLES.len();
         self.current_idx = clamped;
@@ -353,7 +424,166 @@ pub fn render_puzzles_page(
         .exact_width(380.0)
         .resizable(false)
         .show_inside(ui, |ui| {
-            ui.add_space(10.0);
+            ui.add_space(8.0);
+
+            // Tab Mode Switcher: Curated Tactics vs Personal Mistake Vault (Feature #5)
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_label(
+                        trainer.tab_mode == PuzzleTabMode::Curated,
+                        RichText::new("🧩 Curated (32)").strong().size(12.5),
+                    )
+                    .clicked()
+                {
+                    trainer.tab_mode = PuzzleTabMode::Curated;
+                    let idx = trainer.current_idx;
+                    trainer.load_puzzle(idx);
+                }
+                let vault_label = format!(
+                    "🔥 Blunder Deck ({})",
+                    profile.active_mistakes_count()
+                );
+                if ui
+                    .selectable_label(
+                        trainer.tab_mode == PuzzleTabMode::BlunderDeck,
+                        RichText::new(vault_label).strong().size(12.5),
+                    )
+                    .clicked()
+                {
+                    trainer.open_blunder_deck(profile);
+                }
+            });
+
+            ui.add_space(6.0);
+
+            if trainer.tab_mode == PuzzleTabMode::BlunderDeck {
+                egui::Frame::none()
+                    .fill(tokens.bg_surface)
+                    .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
+                    .rounding(Rounding::same(8.0_f32))
+                    .inner_margin(egui::Margin::same(10.0))
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(
+                            RichText::new("🔥 Spaced-Repetition Blunder Deck")
+                                .strong()
+                                .size(15.0)
+                                .color(tokens.text_primary),
+                        );
+                        ui.label(
+                            RichText::new(
+                                "Drill real blunders harvested from your matches. Solve 3 times cleanly to master!",
+                            )
+                            .size(11.5)
+                            .color(tokens.text_secondary),
+                        );
+                        ui.add_space(6.0);
+                        ui.label(
+                            RichText::new(&trainer.status_message)
+                                .strong()
+                                .size(12.5)
+                                .color(if trainer.status_is_positive {
+                                    tokens.accent_primary
+                                } else {
+                                    Color32::from_rgb(0xE0, 0x4F, 0x44)
+                                }),
+                        );
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("💡 Show Best Move").clicked() {
+                                if let Some(mid) = trainer.active_mistake_id {
+                                    if let Some(m) =
+                                        profile.mistake_vault.iter().find(|e| e.id == mid)
+                                    {
+                                        if let Ok(mv) =
+                                            parse_uci(&trainer.board_state.current_pos, &m.best_uci)
+                                        {
+                                            if let Some(from) = mv.from() {
+                                                trainer.board_ui.hint_arrow =
+                                                    Some(TacticalArrow::new(
+                                                        from,
+                                                        mv.to(),
+                                                        AnnotationColor::Green,
+                                                    ));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        RichText::new("Next Blunder ⏭")
+                                            .strong()
+                                            .color(Color32::WHITE),
+                                    )
+                                    .fill(tokens.accent_primary),
+                                )
+                                .clicked()
+                            {
+                                trainer.load_next_blunder(profile);
+                            }
+                        });
+                    });
+
+                ui.add_space(8.0);
+                let list_h = (ui.available_height() - 16.0).max(120.0);
+                egui::Frame::none()
+                    .fill(tokens.bg_surface)
+                    .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
+                    .rounding(Rounding::same(8.0_f32))
+                    .inner_margin(egui::Margin::same(6.0))
+                    .show(ui, |ui| {
+                        ScrollArea::vertical()
+                            .id_salt("blunder_deck_list_scroll")
+                            .max_height(list_h)
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                if profile.mistake_vault.is_empty() {
+                                    ui.label(
+                                        RichText::new("No harvested blunders yet. Play matches to build your personal drill deck!")
+                                            .italics()
+                                            .size(12.0)
+                                            .color(tokens.text_secondary),
+                                    );
+                                } else {
+                                    let mut picked_id: Option<u64> = None;
+                                    for item in &profile.mistake_vault {
+                                        let is_cur = trainer.active_mistake_id == Some(item.id);
+                                        let badge = if item.is_mastered() {
+                                            "✓ Mastered"
+                                        } else {
+                                            "Drill"
+                                        };
+                                        let row = format!(
+                                            "[{} {}/3] vs {} • {} (Best: {})",
+                                            badge,
+                                            item.mastery_streak,
+                                            item.opponent_name,
+                                            item.played_san,
+                                            item.best_san
+                                        );
+                                        if ui
+                                            .add_sized(
+                                                [ui.available_width(), 24.0],
+                                                egui::SelectableLabel::new(
+                                                    is_cur,
+                                                    RichText::new(row).size(11.5),
+                                                ),
+                                            )
+                                            .clicked()
+                                        {
+                                            picked_id = Some(item.id);
+                                        }
+                                    }
+                                    if let Some(id) = picked_id {
+                                        trainer.load_mistake_by_id(profile, id);
+                                    }
+                                }
+                            });
+                    });
+                return;
+            }
 
             egui::Frame::none()
                 .fill(tokens.bg_surface)
@@ -566,6 +796,42 @@ pub fn render_puzzles_page(
                     config,
                 ) {
                     let played_uci = format_uci(&mv);
+                    if trainer.tab_mode == PuzzleTabMode::BlunderDeck {
+                        if let Some(mid) = trainer.active_mistake_id {
+                            let expected = profile
+                                .mistake_vault
+                                .iter()
+                                .find(|e| e.id == mid)
+                                .map(|e| (e.best_uci.clone(), e.best_san.clone()));
+                            if let Some((best_uci, best_san)) = expected {
+                                if played_uci == best_uci {
+                                    let prev_pos = trainer.board_state.current_pos.clone();
+                                    let _ = trainer.board_state.apply_move(mv.clone(), 0, 100);
+                                    trainer.board_ui.anim_layer.trigger_move_animation(
+                                        &prev_pos,
+                                        &trainer.board_state.current_pos,
+                                        &mv,
+                                        trainer.board_state.outcome,
+                                        config.animation_profile,
+                                    );
+                                    profile.record_mistake_drill_outcome(mid, true);
+                                    trainer.solved_current = true;
+                                    trainer.status_message = format!(
+                                        "★ Nailed it! {best_san} was the winning resource! Mastery streak increased."
+                                    );
+                                    trainer.status_is_positive = true;
+                                } else {
+                                    profile.record_mistake_drill_outcome(mid, false);
+                                    trainer.status_message =
+                                        "✗ Still missing the best move — try again or click Show Best Move!"
+                                            .to_string();
+                                    trainer.status_is_positive = false;
+                                }
+                            }
+                        }
+                        return;
+                    }
+
                     let expected_uci = puzzle
                         .solution_uci
                         .get(trainer.step_idx)
