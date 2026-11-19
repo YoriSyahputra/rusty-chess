@@ -19,14 +19,16 @@ rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# Optimasi Kompilasi Development (Hemat RAM untuk laptop 4GB)
+# Optimasi Kompilasi Development (Hemat RAM & Disk untuk laptop 4GB)
 [profile.dev]
 opt-level = 1               # Sedikit optimasi agar engine tidak lambat saat debug
-debug = 1                   # Line tables only, menghemat ratusan MB RAM saat linking
+debug = 0                   # Nonaktifkan DWARF debuginfo agar target/debug tidak membengkak bergiga-giga
+incremental = false         # Hindari penumpukan ratusan MB cache incremental di disk
 codegen-units = 4
 
 [profile.dev.package."*"]
 opt-level = 2               # Compile dependencies dengan kecepatan tinggi
+debug = 0
 
 # Optimasi Kompilasi Release (Untuk paket .deb produksi)
 [profile.release]
