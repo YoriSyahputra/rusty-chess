@@ -1,7 +1,10 @@
 use crate::{
     domain::GameOutcome,
     engine::bot::BotPersona,
-    ui::{piece_renderer::draw_bot_avatar, theme::UiTokens},
+    ui::{
+        piece_renderer::draw_bot_avatar,
+        theme::{chess_cta_button, UiTokens},
+    },
 };
 use egui::{Align2, Color32, Context, RichText, Rounding, Sense, Stroke, Vec2, Window};
 use shakmaty::Color;
@@ -13,8 +16,7 @@ pub struct GameOverModalActions {
     pub select_new_bot: bool,
 }
 
-/// Menampilkan Game Over Modal sesuai NEW_DESIGN.md Section 9 (`src/ui/modals/game_over.rs`)
-/// lengkap dengan perolehan mahkota (0..3 Crowns), pemicu Game Review, Rematch, dan New Bot.
+/// Menampilkan Game Over Modal bergaya Chess.com dengan tombol rata penuh & 3D bevel CTA.
 #[allow(clippy::too_many_arguments)]
 pub fn show_game_over_modal(
     ctx: &Context,
@@ -37,7 +39,7 @@ pub fn show_game_over_modal(
     let (headline, headline_color) = if human_won {
         ("🏆 Victory!", tokens.accent_primary)
     } else if is_draw {
-        ("🤝 Match Drawn", tokens.accent_gold)
+        ("½ Match Drawn", tokens.accent_gold)
     } else {
         ("Defeat", Color32::from_rgb(0xE0, 0x4F, 0x44))
     };
@@ -49,8 +51,9 @@ pub fn show_game_over_modal(
         .collapsible(false)
         .resizable(false)
         .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
-        .fixed_size(Vec2::new(370.0, 290.0))
+        .fixed_size(Vec2::new(360.0, 295.0))
         .show(ctx, |ui| {
+            let content_w = ui.available_width();
             ui.vertical_centered(|ui| {
                 ui.add_space(4.0);
                 ui.label(
@@ -65,9 +68,9 @@ pub fn show_game_over_modal(
                         .color(tokens.text_secondary),
                 );
 
-                ui.add_space(8.0);
+                ui.add_space(10.0);
 
-                let (av_rect, _) = ui.allocate_exact_size(Vec2::splat(56.0), Sense::hover());
+                let (av_rect, _) = ui.allocate_exact_size(Vec2::splat(58.0), Sense::hover());
                 draw_bot_avatar(
                     ui.painter(),
                     av_rect,
@@ -75,78 +78,70 @@ pub fn show_game_over_modal(
                     persona.accent_rgb,
                     human_won,
                 );
+                ui.add_space(4.0);
                 ui.label(
                     RichText::new(format!("vs {} ({})", persona.name, persona.elo))
                         .strong()
-                        .size(14.0)
+                        .size(14.5)
                         .color(tokens.text_primary),
                 );
 
-                ui.add_space(6.0);
+                ui.add_space(4.0);
 
-                // Crown display (0..3)
                 let crown_display: String = (0..3)
                     .map(|i| if i < awarded_crowns { "👑 " } else { "☆ " })
                     .collect();
                 ui.label(
-                    RichText::new(crown_display)
+                    RichText::new(crown_display.trim_end())
                         .size(20.0)
                         .color(tokens.accent_gold),
                 );
+            });
 
-                ui.add_space(10.0);
+            ui.add_space(12.0);
 
-                // Primary CTA: Game Review (#81B64C)
-                if ui
+            // Primary CTA: Full-width Chess.com green 3D button
+            if chess_cta_button(
+                ui,
+                Vec2::new(content_w, 42.0),
+                "📊  Game Review",
+                tokens.accent_primary,
+            ) {
+                actions.open_game_review = true;
+                should_close = true;
+            }
+
+            ui.add_space(8.0);
+
+            // Secondary Row: Strictly aligned 50/50 columns matching exact CTA width
+            ui.columns(2, |cols| {
+                let col_w = cols[0].available_width();
+                if cols[0]
                     .add_sized(
-                        [310.0, 40.0],
-                        egui::Button::new(
-                            RichText::new("📊  Game Review")
-                                .strong()
-                                .size(15.5)
-                                .color(Color32::WHITE),
-                        )
-                        .fill(tokens.accent_primary)
-                        .rounding(Rounding::same(7.0_f32)),
+                        [col_w, 36.0],
+                        egui::Button::new(RichText::new("🔄 Rematch").strong().size(13.0))
+                            .rounding(Rounding::same(8.0_f32))
+                            .stroke(Stroke::new(1.0_f32, tokens.border_subtle)),
                     )
                     .clicked()
                 {
-                    actions.open_game_review = true;
+                    actions.play_rematch = true;
                     should_close = true;
                 }
 
-                ui.add_space(6.0);
-
-                ui.horizontal(|ui| {
-                    let half_w = (310.0 - 8.0) * 0.5;
-                    if ui
-                        .add_sized(
-                            [half_w, 34.0],
-                            egui::Button::new(
-                                RichText::new("🔄 Rematch").strong().size(13.0),
-                            )
+                let col_w2 = cols[1].available_width();
+                if cols[1]
+                    .add_sized(
+                        [col_w2, 36.0],
+                        egui::Button::new(RichText::new("♞ New Bot").strong().size(13.0))
+                            .rounding(Rounding::same(8.0_f32))
                             .stroke(Stroke::new(1.0_f32, tokens.border_subtle)),
-                        )
-                        .clicked()
-                    {
-                        actions.play_rematch = true;
-                        should_close = true;
-                    }
-
-                    if ui
-                        .add_sized(
-                            [half_w, 34.0],
-                            egui::Button::new(
-                                RichText::new("🤖 New Bot").strong().size(13.0),
-                            )
-                            .stroke(Stroke::new(1.0_f32, tokens.border_subtle)),
-                        )
-                        .clicked()
-                    {
-                        actions.select_new_bot = true;
-                        should_close = true;
-                    }
-                });
+                    )
+                    .clicked()
+                {
+                    actions.select_new_bot = true;
+                    should_close = true;
+                }
             });
         });
 

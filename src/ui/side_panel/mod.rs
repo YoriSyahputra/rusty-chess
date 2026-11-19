@@ -166,7 +166,7 @@ pub fn render_side_panel(
         }
 
         if ui
-            .add_sized(btn_size, egui::Button::new(RichText::new("⇅ Flip").size(12.0)))
+            .add_sized(btn_size, egui::Button::new(RichText::new("⇄ Flip").size(12.0)))
             .on_hover_text("Flip Board Orientation (F)")
             .clicked()
         {
@@ -196,7 +196,7 @@ pub fn render_side_panel(
         if ui
             .add_enabled(
                 can_use_hint,
-                egui::Button::new(RichText::new("💡 Hint").size(12.0)).min_size(btn_size.into()),
+                egui::Button::new(RichText::new("★ Hint").size(12.0)).min_size(btn_size.into()),
             )
             .on_hover_text("Show recommended best move arrow")
             .clicked()
@@ -218,7 +218,7 @@ pub fn render_side_panel(
         if ui
             .add_enabled(
                 can_resign,
-                egui::Button::new(RichText::new("🏳 Resign").size(12.0)).min_size(btn_size.into()),
+                egui::Button::new(RichText::new("✕ Resign").size(12.0)).min_size(btn_size.into()),
             )
             .on_hover_text("Resign current match")
             .clicked()
@@ -226,20 +226,12 @@ pub fn render_side_panel(
             actions.resign_game = true;
         }
 
-        if ui
-            .add_sized(
-                btn_size,
-                egui::Button::new(
-                    RichText::new("⚔ New")
-                        .strong()
-                        .size(12.0)
-                        .color(Color32::WHITE),
-                )
-                .fill(Color32::from_rgb(0x81, 0xB6, 0x4C)),
-            )
-            .on_hover_text("Start a new match or switch opponent")
-            .clicked()
-        {
+        if crate::ui::theme::chess_cta_button(
+            ui,
+            egui::Vec2::new(btn_size[0], btn_size[1]),
+            "⚔ New",
+            Color32::from_rgb(0x81, 0xB6, 0x4C),
+        ) {
             actions.open_bot_selector = true;
         }
     });
@@ -247,19 +239,12 @@ pub fn render_side_panel(
     if match_state.outcome.is_game_over() {
         ui.add_space(4.0);
         let full_w = ui.available_width();
-        if ui
-            .add_sized(
-                [full_w, 30.0],
-                egui::Button::new(
-                    RichText::new("📊 Game Review")
-                        .strong()
-                        .size(13.0)
-                        .color(Color32::WHITE),
-                )
-                .fill(Color32::from_rgb(0x81, 0xB6, 0x4C)),
-            )
-            .clicked()
-        {
+        if crate::ui::theme::chess_cta_button(
+            ui,
+            egui::Vec2::new(full_w, 34.0),
+            "📊 Game Review",
+            Color32::from_rgb(0x81, 0xB6, 0x4C),
+        ) {
             actions.open_review = true;
         }
     }

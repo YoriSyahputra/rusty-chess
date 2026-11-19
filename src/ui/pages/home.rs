@@ -6,10 +6,10 @@ use crate::{
         board_view::render_board_grid,
         piece_renderer::draw_bot_avatar,
         sidebar::ActiveRoute,
-        theme::{BoardTheme, UiTokens},
+        theme::{chess_cta_button, BoardTheme, UiTokens},
     },
 };
-use egui::{Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Sense, Stroke, Ui, Vec2};
+use egui::{Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Sense, Stroke, TextWrapMode, Ui, Vec2};
 
 #[derive(Debug, Default)]
 pub struct HomePageActions {
@@ -18,11 +18,8 @@ pub struct HomePageActions {
     pub start_coach_match: bool,
 }
 
-/// Merender Home Dashboard (`Route::Home`) sesuai NEW_DESIGN.md Section 3.1:
-/// - Crown Progress Overview (X / 54 Crowns)
-/// - Win / Draw / Loss Record & Puzzle Rating
-/// - Quick Action Cards (Play Bots, Play Coach, Daily Puzzle, Game Review)
-/// - Daily Puzzle Preview Widget & Recent PGN History
+/// Merender Home Dashboard (`Route::Home`) yang responsif tanpa overflow/clipping horizontal
+/// di resolusi 1180x780 maupun 1366x768.
 pub fn render_home_page(
     ui: &mut Ui,
     profile: &UserProfile,
@@ -36,102 +33,106 @@ pub fn render_home_page(
         .id_salt("home_dashboard_scroll")
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            ui.add_space(14.0);
-            ui.horizontal(|ui| {
-                ui.add_space(18.0);
-                ui.vertical(|ui| {
-                    ui.set_max_width((ui.available_width() - 24.0).max(600.0));
+            egui::Frame::none()
+                .inner_margin(egui::Margin::symmetric(18.0, 14.0))
+                .show(ui, |ui| {
+                    ui.style_mut().wrap_mode = Some(TextWrapMode::Wrap);
 
                     // 1. Hero Banner & Stats Strip
                     egui::Frame::none()
                         .fill(tokens.bg_surface)
                         .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
-                        .rounding(Rounding::same(10.0_f32))
-                        .inner_margin(egui::Margin::same(18.0))
+                        .rounding(Rounding::same(12.0_f32))
+                        .inner_margin(egui::Margin::same(16.0))
                         .show(ui, |ui| {
                             ui.set_min_width(ui.available_width());
+                            ui.label(
+                                RichText::new("Welcome to Rusty Chess")
+                                    .strong()
+                                    .size(22.0)
+                                    .color(tokens.text_primary),
+                            );
+                            ui.label(
+                                RichText::new(format!(
+                                    "Native Linux Chess Desktop • {} AI Personalities, Tactics Trainer & Real-Time Analysis",
+                                    BotId::all_lobby_personalities().len()
+                                ))
+                                .size(13.0)
+                                .color(tokens.text_secondary),
+                            );
+                            ui.add_space(10.0);
+
+                            let total_crowns = profile.total_crowns();
+                            let max_crowns = (BotId::all_lobby_personalities().len() as u32) * 3;
+                            let ratio =
+                                (total_crowns as f32 / max_crowns.max(1) as f32).clamp(0.0, 1.0);
+
                             ui.horizontal_wrapped(|ui| {
-                                ui.vertical(|ui| {
-                                    ui.label(
-                                        RichText::new("Welcome to Rusty Chess")
-                                            .strong()
-                                            .size(22.0)
-                                            .color(tokens.text_primary),
-                                    );
-                                    ui.label(
-                                        RichText::new(
-                                            "Native Linux Chess Desktop • 18 AI Personalities, Tactics Trainer & Local Game Review",
-                                        )
-                                        .size(13.0)
+                                ui.label(
+                                    RichText::new(format!(
+                                        "👑 Bot Crowns: {total_crowns} / {max_crowns}"
+                                    ))
+                                    .strong()
+                                    .size(13.5)
+                                    .color(tokens.accent_gold),
+                                );
+                                ui.label(RichText::new("•").color(tokens.text_secondary));
+                                ui.label(
+                                    RichText::new(format!(
+                                        "Record: {}W - {}D - {}L",
+                                        profile.wins, profile.draws, profile.losses
+                                    ))
+                                    .size(12.5)
+                                    .color(tokens.text_secondary),
+                                );
+                                ui.label(RichText::new("•").color(tokens.text_secondary));
+                                ui.label(
+                                    RichText::new(format!("★ Puzzle: {}", profile.puzzle_rating))
+                                        .size(12.5)
                                         .color(tokens.text_secondary),
-                                    );
-                                    ui.add_space(10.0);
-
-                                    // Crown Progress Bar (X / 54)
-                                    let total_crowns = profile.total_crowns();
-                                    let max_crowns = 54u32;
-                                    let ratio =
-                                        (total_crowns as f32 / max_crowns as f32).clamp(0.0, 1.0);
-
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            RichText::new(format!(
-                                                "👑 Bot Crowns Collected: {total_crowns} / {max_crowns}"
-                                            ))
-                                            .strong()
-                                            .size(13.5)
-                                            .color(tokens.accent_gold),
-                                        );
-                                        ui.add_space(12.0);
-                                        let dna = profile.compute_skill_dna();
-                                        ui.label(
-                                            RichText::new(format!(
-                                                "Record: {}W - {}D - {}L   |   🧩 Puzzle: {}   |   🧬 DNA: {}",
-                                                profile.wins,
-                                                profile.draws,
-                                                profile.losses,
-                                                profile.puzzle_rating,
-                                                dna.archetype
-                                            ))
-                                            .size(12.5)
-                                            .color(tokens.text_secondary),
-                                        );
-                                        if ui.small_button("📈 View Insights").clicked() {
-                                            actions.navigate_to = Some(ActiveRoute::Analytics);
-                                        }
-                                    });
-
-                                    let bar_w = (ui.available_width() - 16.0).clamp(240.0, 520.0);
-                                    let (bar_rect, _) =
-                                        ui.allocate_exact_size(Vec2::new(bar_w, 10.0), Sense::hover());
-                                    ui.painter().rect_filled(
-                                        bar_rect,
-                                        Rounding::same(5.0_f32),
-                                        tokens.bg_surface_elevated,
-                                    );
-                                    let fill_w = (bar_rect.width() * ratio).max(if total_crowns > 0 {
-                                        8.0
-                                    } else {
-                                        0.0
-                                    });
-                                    if fill_w > 0.0 {
-                                        let fill_rect = Rect::from_min_max(
-                                            bar_rect.min,
-                                            Pos2::new(bar_rect.min.x + fill_w, bar_rect.max.y),
-                                        );
-                                        ui.painter().rect_filled(
-                                            fill_rect,
-                                            Rounding::same(5.0_f32),
-                                            tokens.accent_gold,
-                                        );
-                                    }
-                                });
+                                );
+                                ui.label(RichText::new("•").color(tokens.text_secondary));
+                                let dna = profile.compute_skill_dna();
+                                ui.label(
+                                    RichText::new(format!("◈ DNA: {}", dna.archetype))
+                                        .size(12.5)
+                                        .color(tokens.accent_info),
+                                );
+                                if ui.small_button("📈 Insights").clicked() {
+                                    actions.navigate_to = Some(ActiveRoute::Analytics);
+                                }
                             });
+
+                            ui.add_space(6.0);
+                            let bar_w = (ui.available_width() - 8.0).clamp(200.0, 520.0);
+                            let (bar_rect, _) =
+                                ui.allocate_exact_size(Vec2::new(bar_w, 9.0), Sense::hover());
+                            ui.painter().rect_filled(
+                                bar_rect,
+                                Rounding::same(5.0_f32),
+                                tokens.bg_surface_elevated,
+                            );
+                            let fill_w = (bar_rect.width() * ratio).max(if total_crowns > 0 {
+                                8.0
+                            } else {
+                                0.0
+                            });
+                            if fill_w > 0.0 {
+                                let fill_rect = Rect::from_min_max(
+                                    bar_rect.min,
+                                    Pos2::new(bar_rect.min.x + fill_w, bar_rect.max.y),
+                                );
+                                ui.painter().rect_filled(
+                                    fill_rect,
+                                    Rounding::same(5.0_f32),
+                                    tokens.accent_gold,
+                                );
+                            }
                         });
 
                     ui.add_space(16.0);
 
-                    // 2. Quick Action Cards Row
+                    // 2. Quick Action Cards Row — using exact responsive 4-column layout (zero overflow!)
                     ui.label(
                         RichText::new("Quick Play & Training")
                             .strong()
@@ -140,15 +141,11 @@ pub fn render_home_page(
                     );
                     ui.add_space(8.0);
 
-                    let avail_w = ui.available_width();
-                    let card_w = ((avail_w - 36.0) / 4.0).max(165.0);
-
-                    ui.horizontal_wrapped(|ui| {
+                    ui.columns(4, |cols| {
                         if render_action_card(
-                            ui,
-                            card_w,
-                            "🤖 Play Bots",
-                            "Challenge 18 personalities from Martin (250) to Magnus & Mittens",
+                            &mut cols[0],
+                            "♞ Play Bots",
+                            "Challenge 24 personalities from Martin to Magnus & Mittens.",
                             "Open Lobby",
                             tokens.accent_primary,
                             &tokens,
@@ -157,10 +154,9 @@ pub fn render_home_page(
                         }
 
                         if render_action_card(
-                            ui,
-                            card_w,
+                            &mut cols[1],
                             "🎓 Play Coach",
-                            "Friendly guided match with move feedback, hints, and takebacks",
+                            "Guided match with live move feedback, hints, and takebacks.",
                             "Play Friendly",
                             tokens.accent_info,
                             &tokens,
@@ -169,10 +165,9 @@ pub fn render_home_page(
                         }
 
                         if render_action_card(
-                            ui,
-                            card_w,
-                            "🧩 Daily Puzzle",
-                            "Sharpen tactical vision with 30+ curated combinations & 5-heart rush",
+                            &mut cols[2],
+                            "★ Daily Puzzle",
+                            "Sharpen tactics with 32 curated puzzles & Puzzle Rush.",
                             "Solve Puzzles",
                             tokens.accent_gold,
                             &tokens,
@@ -181,23 +176,22 @@ pub fn render_home_page(
                         }
 
                         if render_action_card(
-                            ui,
-                            card_w,
+                            &mut cols[3],
                             "📊 Game Review",
-                            "Analyze accuracy %, Brilliant (!!) moves, and win probability graph",
+                            "Inspect accuracy %, Brilliant (!!) moves, and Multi-PV.",
                             "Review Match",
-                            Color32::from_rgb(155, 110, 235),
+                            Color32::from_rgb(145, 102, 228),
                             &tokens,
                         ) {
                             actions.navigate_to = Some(ActiveRoute::Review);
                         }
                     });
 
-                    ui.add_space(18.0);
+                    ui.add_space(16.0);
 
-                    // 3. Featured Challengers + Daily Puzzle Preview + Recent Matches
+                    // 3. Featured Challengers + Daily Puzzle Preview & Recent Matches
                     ui.columns(2, |cols| {
-                        // Left Column: Featured Bot Challengers & Daily Puzzle Mini Board
+                        // Left Column: Featured Challengers
                         cols[0].vertical(|ui| {
                             ui.label(
                                 RichText::new("Featured Challengers")
@@ -220,12 +214,15 @@ pub fn render_home_page(
                                 egui::Frame::none()
                                     .fill(tokens.bg_surface)
                                     .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
-                                    .rounding(Rounding::same(8.0_f32))
-                                    .inner_margin(egui::Margin::symmetric(10.0, 7.0))
+                                    .rounding(Rounding::same(10.0_f32))
+                                    .inner_margin(egui::Margin::symmetric(10.0, 8.0))
                                     .show(ui, |ui| {
+                                        ui.set_min_width(ui.available_width());
                                         ui.horizontal(|ui| {
-                                            let (av_rect, _) = ui
-                                                .allocate_exact_size(Vec2::splat(36.0), Sense::hover());
+                                            let (av_rect, _) = ui.allocate_exact_size(
+                                                Vec2::splat(36.0),
+                                                Sense::hover(),
+                                            );
                                             draw_bot_avatar(
                                                 ui.painter(),
                                                 av_rect,
@@ -233,7 +230,7 @@ pub fn render_home_page(
                                                 bot.accent_rgb,
                                                 false,
                                             );
-                                            ui.add_space(6.0);
+                                            ui.add_space(4.0);
                                             ui.vertical(|ui| {
                                                 let elo_txt = if bot.code == "mittens" {
                                                     "1".to_string()
@@ -267,29 +264,23 @@ pub fn render_home_page(
                                             ui.with_layout(
                                                 egui::Layout::right_to_left(egui::Align::Center),
                                                 |ui| {
-                                                    if ui
-                                                        .add(
-                                                            egui::Button::new(
-                                                                RichText::new("Challenge")
-                                                                    .strong()
-                                                                    .size(12.0)
-                                                                    .color(Color32::WHITE),
-                                                            )
-                                                            .fill(tokens.accent_primary),
-                                                        )
-                                                        .clicked()
-                                                    {
+                                                    if chess_cta_button(
+                                                        ui,
+                                                        Vec2::new(84.0, 28.0),
+                                                        "Challenge",
+                                                        tokens.accent_primary,
+                                                    ) {
                                                         actions.quick_start_bot = Some(bot.id);
                                                     }
                                                 },
                                             );
                                         });
                                     });
-                                ui.add_space(5.0);
+                                ui.add_space(6.0);
                             }
                         });
 
-                        // Right Column: Daily Puzzle Board Preview & Recent Match History
+                        // Right Column: Daily Puzzle Spotlight + Recent Matches
                         cols[1].vertical(|ui| {
                             ui.label(
                                 RichText::new("Daily Tactical Spotlight")
@@ -302,11 +293,15 @@ pub fn render_home_page(
                             egui::Frame::none()
                                 .fill(tokens.bg_surface)
                                 .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
-                                .rounding(Rounding::same(8.0_f32))
+                                .rounding(Rounding::same(10.0_f32))
                                 .inner_margin(egui::Margin::same(12.0))
                                 .show(ui, |ui| {
+                                    ui.set_min_width(ui.available_width());
+                                    let card_w = ui.available_width();
+                                    let preview_size = (card_w * 0.34).clamp(112.0, 142.0);
+                                    let text_w = (card_w - preview_size - 16.0).max(120.0);
+
                                     ui.horizontal(|ui| {
-                                        let preview_size = 152.0;
                                         let (b_rect, resp) = ui.allocate_exact_size(
                                             Vec2::splat(preview_size),
                                             Sense::click(),
@@ -336,41 +331,43 @@ pub fn render_home_page(
                                         }
 
                                         ui.add_space(8.0);
-                                        ui.vertical(|ui| {
-                                            ui.label(
-                                                RichText::new("Back-Rank Deflection")
-                                                    .strong()
-                                                    .size(14.5)
-                                                    .color(tokens.text_primary),
-                                            );
-                                            ui.label(
-                                                RichText::new("White to Move • Mate in 2")
-                                                    .size(12.0)
-                                                    .color(tokens.accent_gold),
-                                            );
-                                            ui.add_space(8.0);
-                                            ui.label(
-                                                RichText::new(
-                                                    "Find the forcing rook sacrifice that breaks Black's 8th-rank defense.",
-                                                )
-                                                .size(12.0)
-                                                .color(tokens.text_secondary),
-                                            );
-                                            ui.add_space(10.0);
-                                            if ui
-                                                .add(
-                                                    egui::Button::new(
-                                                        RichText::new("▶ Solve Now")
-                                                            .strong()
-                                                            .color(Color32::WHITE),
+                                        ui.allocate_ui_with_layout(
+                                            Vec2::new(text_w, preview_size),
+                                            egui::Layout::top_down(egui::Align::Min),
+                                            |ui| {
+                                                ui.style_mut().wrap_mode =
+                                                    Some(TextWrapMode::Wrap);
+                                                ui.label(
+                                                    RichText::new("Back-Rank Deflection")
+                                                        .strong()
+                                                        .size(14.5)
+                                                        .color(tokens.text_primary),
+                                                );
+                                                ui.label(
+                                                    RichText::new("White to Move • Mate in 2")
+                                                        .size(12.0)
+                                                        .color(tokens.accent_gold),
+                                                );
+                                                ui.add_space(6.0);
+                                                ui.label(
+                                                    RichText::new(
+                                                        "Find the forcing rook sacrifice that breaks Black's 8th-rank defense.",
                                                     )
-                                                    .fill(tokens.accent_primary),
-                                                )
-                                                .clicked()
-                                            {
-                                                actions.navigate_to = Some(ActiveRoute::Puzzles);
-                                            }
-                                        });
+                                                    .size(12.0)
+                                                    .color(tokens.text_secondary),
+                                                );
+                                                ui.add_space(8.0);
+                                                if chess_cta_button(
+                                                    ui,
+                                                    Vec2::new(112.0, 30.0),
+                                                    "▶ Solve Now",
+                                                    tokens.accent_primary,
+                                                ) {
+                                                    actions.navigate_to =
+                                                        Some(ActiveRoute::Puzzles);
+                                                }
+                                            },
+                                        );
                                     });
                                 });
 
@@ -386,7 +383,7 @@ pub fn render_home_page(
                             egui::Frame::none()
                                 .fill(tokens.bg_surface)
                                 .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
-                                .rounding(Rounding::same(8.0_f32))
+                                .rounding(Rounding::same(10.0_f32))
                                 .inner_margin(egui::Margin::same(10.0))
                                 .show(ui, |ui| {
                                     ui.set_min_width(ui.available_width());
@@ -400,7 +397,12 @@ pub fn render_home_page(
                                             .color(tokens.text_secondary),
                                         );
                                     } else {
-                                        for m in profile.recent_matches.iter().take(4) {
+                                        for (i, m) in
+                                            profile.recent_matches.iter().take(4).enumerate()
+                                        {
+                                            if i > 0 {
+                                                ui.separator();
+                                            }
                                             ui.horizontal(|ui| {
                                                 ui.label(
                                                     RichText::new(format!(
@@ -411,17 +413,14 @@ pub fn render_home_page(
                                                     .size(12.5)
                                                     .color(tokens.text_primary),
                                                 );
-                                                ui.label(
-                                                    RichText::new(&m.result_label)
-                                                        .size(12.0)
-                                                        .color(tokens.accent_gold),
-                                                );
                                                 ui.with_layout(
-                                                    egui::Layout::right_to_left(egui::Align::Center),
+                                                    egui::Layout::right_to_left(
+                                                        egui::Align::Center,
+                                                    ),
                                                     |ui| {
                                                         ui.label(
                                                             RichText::new(format!(
-                                                                "Acc: {:.1}% • {} moves",
+                                                                "{:.1}% • {}m",
                                                                 m.player_accuracy, m.moves_count
                                                             ))
                                                             .monospace()
@@ -431,15 +430,17 @@ pub fn render_home_page(
                                                     },
                                                 );
                                             });
-                                            ui.separator();
+                                            ui.label(
+                                                RichText::new(&m.result_label)
+                                                    .size(11.5)
+                                                    .color(tokens.accent_gold),
+                                            );
                                         }
                                     }
                                 });
                         });
                     });
                 });
-            });
-            ui.add_space(16.0);
         });
 
     actions
@@ -447,7 +448,6 @@ pub fn render_home_page(
 
 fn render_action_card(
     ui: &mut Ui,
-    width: f32,
     title: &str,
     desc: &str,
     cta: &str,
@@ -458,16 +458,19 @@ fn render_action_card(
     egui::Frame::none()
         .fill(tokens.bg_surface)
         .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
-        .rounding(Rounding::same(8.0_f32))
+        .rounding(Rounding::same(10.0_f32))
         .inner_margin(egui::Margin::same(12.0))
         .show(ui, |ui| {
-            ui.set_width(width);
-            ui.set_min_height(118.0);
+            let inner_w = ui.available_width();
+            ui.set_min_width(inner_w);
+            ui.set_min_height(114.0);
+            ui.style_mut().wrap_mode = Some(TextWrapMode::Wrap);
+
             ui.vertical(|ui| {
                 ui.label(
                     RichText::new(title)
                         .strong()
-                        .size(15.5)
+                        .size(14.5)
                         .color(tokens.text_primary),
                 );
                 ui.add_space(4.0);
@@ -477,19 +480,7 @@ fn render_action_card(
                         .color(tokens.text_secondary),
                 );
                 ui.add_space(10.0);
-                if ui
-                    .add_sized(
-                        [width - 8.0, 30.0],
-                        egui::Button::new(
-                            RichText::new(cta)
-                                .strong()
-                                .size(12.5)
-                                .color(Color32::WHITE),
-                        )
-                        .fill(accent),
-                    )
-                    .clicked()
-                {
+                if chess_cta_button(ui, Vec2::new(inner_w, 32.0), cta, accent) {
                     clicked = true;
                 }
             });

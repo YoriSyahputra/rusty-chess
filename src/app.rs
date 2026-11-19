@@ -1364,6 +1364,9 @@ impl eframe::App for RustyChessApp {
                                 self.fen_error_msg = None;
                                 self.show_fen_pgn_modal = true;
                             }
+                            if top_actions.open_appearance_modal {
+                                self.show_settings_modal = true;
+                            }
                             if top_actions.toggle_zen_mode {
                                 self.zen_mode = !self.zen_mode;
                             }

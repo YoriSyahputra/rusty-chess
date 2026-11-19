@@ -14,9 +14,11 @@ impl BoardTextureCache {
         match theme {
             BoardTheme::ClassicGreen => 0,
             BoardTheme::WalnutWood => 1,
-            BoardTheme::TournamentBlue => 2,
-            BoardTheme::IcySea => 3,
-            BoardTheme::DarkSlate => 4,
+            BoardTheme::Emerald => 2,
+            BoardTheme::TournamentBlue => 3,
+            BoardTheme::IcySea => 4,
+            BoardTheme::Newspaper => 5,
+            BoardTheme::DarkSlate => 6,
         }
     }
 
@@ -63,14 +65,13 @@ pub fn generate_procedural_board_overlay(theme: BoardTheme, size: usize) -> Colo
                         Color32::from_rgba_unmultiplied(255, 232, 195, ((-wave) * 16.0) as u8)
                     }
                 }
-                BoardTheme::ClassicGreen => {
-                    // Subtle matte tournament linen weave
-                    let weave = (((x % 4 == 0) as i32) + ((y % 4 == 0) as i32)) as f32;
-                    let alpha = (6.0 + weave * 5.0 + noise.abs() * 8.0).clamp(0.0, 24.0) as u8;
-                    if (x + y) % 2 == 0 {
-                        Color32::from_rgba_unmultiplied(255, 255, 240, alpha / 2)
+                BoardTheme::ClassicGreen | BoardTheme::Emerald | BoardTheme::Newspaper => {
+                    // Subtle matte tournament surface micro-grain
+                    let alpha = (2.0 + noise.abs() * 5.0).clamp(0.0, 8.0) as u8;
+                    if noise > 0.0 {
+                        Color32::from_rgba_unmultiplied(255, 255, 245, alpha)
                     } else {
-                        Color32::from_rgba_unmultiplied(15, 25, 10, alpha)
+                        Color32::from_rgba_unmultiplied(15, 20, 12, alpha)
                     }
                 }
                 BoardTheme::TournamentBlue => {

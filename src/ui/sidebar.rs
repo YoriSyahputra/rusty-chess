@@ -77,12 +77,12 @@ pub fn render_left_sidebar(
 
         ui.add_space(10.0);
 
-        // 2. Navigation Destinations
+        // 2. Navigation Destinations (using crisp guaranteed-rendered glyphs)
         let nav_items = [
             (ActiveRoute::Home, "🏠", "Home"),
             (ActiveRoute::PlayHub, "♟", "Play"),
-            (ActiveRoute::PlayBots, "🤖", "Bots"),
-            (ActiveRoute::Puzzles, "🧩", "Puzzles"),
+            (ActiveRoute::PlayBots, "♞", "Bots"),
+            (ActiveRoute::Puzzles, "★", "Puzzles"),
             (ActiveRoute::Endgames, "♔", "Endgames"),
             (ActiveRoute::Arena, "⚔", "Arena"),
             (ActiveRoute::Vision, "🎯", "Vision"),
