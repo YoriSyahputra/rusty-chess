@@ -1,20 +1,23 @@
 use crate::{
-    config::{MoveInputMethod, UserConfig},
+    config::{AssistanceMode, MoveInputMethod, UserConfig},
     domain::{AnnotationColor, ChessMatchState, MarkedSquare, PlayerController, TacticalArrow},
     ui::{
         board_textures::BoardTextureCache,
         board_view::{
             animation::BoardAnimationLayer,
-            grid::{pos_to_square, render_board_grid_ext},
-            heatmap::render_xray_heatmap,
+            grid::{pos_to_square, render_board_grid_ext, square_to_rect},
+            heatmap::{render_tactical_threat_lasers, render_xray_heatmap},
             promotion_popup::{show_promotion_popup, PendingPromotion, PromotionChoice},
         },
         piece_renderer::draw_chess_piece_styled,
         theme::BoardTheme,
     },
 };
-use egui::{Pos2, Rect, Sense, Ui, Vec2};
+use egui::{Align2, Color32, FontId, Pos2, Rect, Rounding, Sense, Stroke, Ui, Vec2};
 use shakmaty::{Move, Position, Role, Square};
+use std::collections::VecDeque;
+
+pub const MAX_QUEUED_PREMOVES: usize = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QueuedPremove {
@@ -28,13 +31,15 @@ pub struct BoardInteractionState {
     pub selected_square: Option<Square>,
     pub dragging_from: Option<Square>,
     pub drag_pos: Option<Pos2>,
+    pub drag_prev_pos: Option<Pos2>,
+    pub drag_velocity: Vec2,
     pub right_drag_start: Option<Square>,
     pub right_drag_current: Option<Square>,
     pub right_drag_color: AnnotationColor,
     pub pending_promotion: Option<PendingPromotion>,
     pub hint_arrow: Option<TacticalArrow>,
     pub threat_arrow: Option<TacticalArrow>,
-    pub queued_premove: Option<QueuedPremove>,
+    pub queued_premoves: VecDeque<QueuedPremove>,
     pub anim_layer: BoardAnimationLayer,
     pub texture_cache: BoardTextureCache,
 }
@@ -44,17 +49,27 @@ impl BoardInteractionState {
         self.selected_square = None;
         self.dragging_from = None;
         self.drag_pos = None;
+        self.drag_prev_pos = None;
+        self.drag_velocity = Vec2::ZERO;
         self.right_drag_start = None;
         self.right_drag_current = None;
         self.pending_promotion = None;
         self.hint_arrow = None;
         self.threat_arrow = None;
-        self.queued_premove = None;
+        self.queued_premoves.clear();
         self.anim_layer.clear();
     }
 
+    pub fn enqueue_premove(&mut self, from: Square, to: Square, promotion: Option<Role>) {
+        if self.queued_premoves.len() >= MAX_QUEUED_PREMOVES {
+            return;
+        }
+        self.queued_premoves
+            .push_back(QueuedPremove { from, to, promotion });
+    }
+
     pub fn try_consume_premove(&mut self, match_state: &ChessMatchState) -> Option<Move> {
-        let pm = self.queued_premove.take()?;
+        let pm = self.queued_premoves.pop_front()?;
         let candidates: Vec<Move> = match_state
             .legal_moves_from(pm.from)
             .into_iter()
@@ -62,6 +77,8 @@ impl BoardInteractionState {
             .collect();
 
         if candidates.is_empty() {
+            // If the front premove is no longer legal, cancel any chained follow-ups
+            self.queued_premoves.clear();
             return None;
         }
         if let Some(promo) = pm.promotion {
@@ -79,7 +96,6 @@ impl BoardInteractionState {
         }
     }
 
-    /// Compatibility wrapper
     pub fn ui(
         &mut self,
         ui: &mut Ui,
@@ -96,8 +112,8 @@ impl BoardInteractionState {
         self.ui_with_config(ui, board_size, match_state, &cfg)
     }
 
-    /// Merender papan catur 8x8 interaktif lengkap dengan BoardAnimationLayer,
-    /// Premove Queue, Snap-backs, dan 4-Color Right-Click Annotations.
+    /// Merender papan catur 8x8 interaktif lengkap dengan Multi-Premove Chaining,
+    /// BoardAnimationLayer, Threat Laser Lines, dan Velocity Drag Physics.
     pub fn ui_with_config(
         &mut self,
         ui: &mut Ui,
@@ -147,16 +163,14 @@ impl BoardInteractionState {
         };
 
         let preview_arrow = match (self.right_drag_start, self.right_drag_current) {
-            (Some(from), Some(to)) if from != to => Some(TacticalArrow::new(
-                from,
-                to,
-                self.right_drag_color,
-            )),
+            (Some(from), Some(to)) if from != to => {
+                Some(TacticalArrow::new(from, to, self.right_drag_color))
+            }
             _ => None,
         };
 
         let hidden_squares = self.anim_layer.prune_and_collect_hidden_squares();
-        let premove_squares = self.queued_premove.map(|pm| (pm.from, pm.to));
+        let first_premove_squares = self.queued_premoves.front().map(|pm| (pm.from, pm.to));
 
         let palette = config.board_theme.palette();
         let painter = ui.painter_at(raw_rect.expand(8.0));
@@ -185,7 +199,7 @@ impl BoardInteractionState {
             config.show_coordinates,
             self.selected_square,
             displayed_last_move,
-            premove_squares,
+            first_premove_squares,
             &legal_for_selected,
             &match_state.marked_squares,
             &combined_arrows,
@@ -197,23 +211,67 @@ impl BoardInteractionState {
             tex_id,
         );
 
-        // Render X-Ray Square Control Heatmap Overlay when enabled (Feature #2)
+        // Render chained multi-premove highlights + numbered badges (Feature #13)
+        if !self.queued_premoves.is_empty() {
+            let sq_size = board_rect.width() / 8.0;
+            for (idx, pm) in self.queued_premoves.iter().enumerate() {
+                let from_r = square_to_rect(board_rect, pm.from, flipped);
+                let to_r = square_to_rect(board_rect, pm.to, flipped);
+                if idx > 0 {
+                    painter.rect_filled(from_r, Rounding::ZERO, palette.premove_square);
+                    painter.rect_filled(to_r, Rounding::ZERO, palette.premove_square);
+                }
+                if self.queued_premoves.len() > 1 {
+                    let badge_c = Pos2::new(to_r.min.x + 11.0, to_r.min.y + 11.0);
+                    painter.circle_filled(badge_c, 8.5, Color32::from_rgb(0xE0, 0x4F, 0x44));
+                    painter.text(
+                        badge_c,
+                        Align2::CENTER_CENTER,
+                        format!("{}", idx + 1),
+                        FontId::proportional((sq_size * 0.16).clamp(9.0, 12.0)),
+                        Color32::WHITE,
+                    );
+                }
+            }
+        }
+
+        // Render X-Ray Square Control Heatmap & Tactical Threat Lasers (Features #2 & #14)
         if config.show_xray_heatmap {
             render_xray_heatmap(&painter, board_rect, &displayed_pos, flipped);
         }
+        let show_threat_lasers = config.show_xray_heatmap
+            || config.assistance_mode == AssistanceMode::Assisted
+            || (config.assistance_mode == AssistanceMode::Custom
+                && config.custom_assistance.threat_arrows);
+        if show_threat_lasers {
+            render_tactical_threat_lasers(&painter, board_rect, &displayed_pos, flipped);
+        }
 
-        // Render active piece slide animations, capture fades, snap-backs, check pulses & King result badges
+        // Render active piece slide animations, capture fades, particles, confetti, spring badges & King badges
         self.anim_layer
             .render_animations(&painter, board_rect, flipped, config.piece_set);
 
-        // Render dragged piece following cursor (1.15x with drop shadow)
+        // Render dragged piece with Velocity-Based Lift & Shadow Physics (Feature #15a)
         if let (Some(drag_sq), Some(cursor_pos)) = (self.dragging_from, self.drag_pos) {
             if let Some(piece) = displayed_pos.board().piece_at(drag_sq) {
                 let sq_size = board_rect.width() / 8.0;
+                let speed = self.drag_velocity.length().clamp(0.0, 45.0);
+                let lift_bonus = 1.0 + (speed / 45.0) * 0.08;
+                let tilt_offset = Vec2::new(
+                    (self.drag_velocity.x * 0.18).clamp(-6.0, 6.0),
+                    (self.drag_velocity.y * 0.10).clamp(-4.0, 4.0) - (speed * 0.08),
+                );
+                // Dynamic shadow trailing behind drag velocity
+                let shadow_c = cursor_pos - tilt_offset * 0.9 + Vec2::new(3.0, sq_size * 0.28);
+                painter.circle_filled(
+                    shadow_c,
+                    sq_size * 0.34,
+                    Color32::from_rgba_unmultiplied(0, 0, 0, 55),
+                );
                 draw_chess_piece_styled(
                     &painter,
-                    cursor_pos,
-                    sq_size,
+                    cursor_pos + tilt_offset,
+                    sq_size * lift_bonus,
                     piece.color,
                     piece.role,
                     true,
@@ -241,6 +299,7 @@ impl BoardInteractionState {
         if executed_move.is_some() {
             self.hint_arrow = None;
         }
+        let _ = Stroke::NONE;
 
         executed_move
     }
@@ -272,9 +331,8 @@ impl BoardInteractionState {
         if response.drag_started_by(egui::PointerButton::Secondary)
             || response.clicked_by(egui::PointerButton::Secondary)
         {
-            // Right-clicking cancels any queued premove
-            if self.queued_premove.is_some() {
-                self.queued_premove = None;
+            if !self.queued_premoves.is_empty() {
+                self.queued_premoves.clear();
             }
             if let Some(pos) = pointer_pos {
                 if let Some(sq) = pos_to_square(board_rect, pos, flipped) {
@@ -364,6 +422,8 @@ impl BoardInteractionState {
         if !can_human_move && !can_premove {
             self.dragging_from = None;
             self.drag_pos = None;
+            self.drag_prev_pos = None;
+            self.drag_velocity = Vec2::ZERO;
             return None;
         }
 
@@ -391,6 +451,8 @@ impl BoardInteractionState {
                             self.selected_square = Some(sq);
                             self.dragging_from = Some(sq);
                             self.drag_pos = Some(pos);
+                            self.drag_prev_pos = Some(pos);
+                            self.drag_velocity = Vec2::ZERO;
                             ui.ctx().request_repaint();
                         }
                     }
@@ -398,9 +460,16 @@ impl BoardInteractionState {
             }
         }
 
-        // 2. Dragging in progress
+        // 2. Dragging in progress with smoothed velocity tracking
         if allow_drag && response.dragged_by(egui::PointerButton::Primary) && self.dragging_from.is_some() {
-            self.drag_pos = pointer_pos;
+            if let Some(cur) = pointer_pos {
+                if let Some(prev) = self.drag_prev_pos {
+                    let delta = cur - prev;
+                    self.drag_velocity = self.drag_velocity * 0.65 + delta * 0.35;
+                }
+                self.drag_prev_pos = Some(cur);
+                self.drag_pos = Some(cur);
+            }
             ui.ctx().request_repaint();
         }
 
@@ -408,6 +477,8 @@ impl BoardInteractionState {
         if allow_drag && response.drag_stopped_by(egui::PointerButton::Primary) {
             if let Some(from_sq) = self.dragging_from.take() {
                 let drop_pos = self.drag_pos.take().or(pointer_pos);
+                self.drag_prev_pos = None;
+                self.drag_velocity = Vec2::ZERO;
                 if let Some(pos) = drop_pos {
                     if let Some(to_sq) = pos_to_square(board_rect, pos, flipped) {
                         if to_sq != from_sq {
@@ -418,7 +489,6 @@ impl BoardInteractionState {
                                     self.selected_square = None;
                                     return Some(mv);
                                 } else if self.pending_promotion.is_none() {
-                                    // Illegal move dropped -> Snap-back animation!
                                     if let Some(p) = match_state.current_pos.board().piece_at(from_sq)
                                     {
                                         self.anim_layer
@@ -426,11 +496,7 @@ impl BoardInteractionState {
                                     }
                                 }
                             } else if can_premove {
-                                self.queued_premove = Some(QueuedPremove {
-                                    from: from_sq,
-                                    to: to_sq,
-                                    promotion: Some(Role::Queen),
-                                });
+                                self.enqueue_premove(from_sq, to_sq, Some(Role::Queen));
                                 self.selected_square = None;
                             }
                         }
@@ -456,11 +522,7 @@ impl BoardInteractionState {
                                 return Some(mv);
                             }
                         } else if can_premove {
-                            self.queued_premove = Some(QueuedPremove {
-                                from: from_sq,
-                                to: clicked_sq,
-                                promotion: Some(Role::Queen),
-                            });
+                            self.enqueue_premove(from_sq, clicked_sq, Some(Role::Queen));
                             self.selected_square = None;
                             return None;
                         }
