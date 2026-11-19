@@ -8,12 +8,23 @@ PKG_DIR_NAME="${APP_NAME}_${APP_VERSION}_${ARCH}"
 STAGING_ROOT="build-deb/${PKG_DIR_NAME}"
 DEB_OUTPUT="${PKG_DIR_NAME}.deb"
 
+SKIP_TESTS="${SKIP_TESTS:-0}"
+for arg in "$@"; do
+  if [[ "$arg" == "--fast" || "$arg" == "--skip-tests" ]]; then
+    SKIP_TESTS=1
+  fi
+done
+
 echo "========================================================"
 echo " Building ${APP_NAME} v${APP_VERSION} (${ARCH}) .deb Package"
 echo "========================================================"
 
-echo "[1/6] Running test suite (cargo test)..."
-cargo test
+if [[ "${SKIP_TESTS}" == "1" ]]; then
+  echo "[1/6] Skipping cargo test (--fast mode — saves debug recompile time & disk)..."
+else
+  echo "[1/6] Running test suite (cargo test)..."
+  cargo test
+fi
 
 echo "[2/6] Building optimized release binary (cargo build --release)..."
 cargo build --release
