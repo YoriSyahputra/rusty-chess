@@ -7,6 +7,7 @@ use crate::{
     config::{AssistanceMode, NotationStyle},
     domain::{detect_opening_from_records, ChessMatchState},
     engine::bot::BotPersona,
+    ui::piece_renderer::BotMood,
 };
 use bot_card::render_bot_card;
 pub use bot_selector::{show_bot_selector_modal, MatchSetupSelection};
@@ -35,6 +36,7 @@ pub fn render_side_panel(
     persona: &BotPersona,
     bot_dialogue: &str,
     is_thinking: bool,
+    bot_mood: BotMood,
     assistance_mode: AssistanceMode,
     hints_remaining: Option<u8>,
     takebacks_remaining: Option<u8>,
@@ -46,12 +48,13 @@ pub fn render_side_panel(
 
     ui.add_space(4.0);
 
-    // 1. Pinned Header (~112 px): Reactive Bot Speech Bubble + Mode Badge
+    // 1. Pinned Header (~112 px): Reactive Bot Speech Bubble + Mode Badge + Mood Avatar
     render_bot_card(
         ui,
         persona,
         bot_dialogue,
         is_thinking,
+        bot_mood,
         assistance_mode,
         hints_remaining,
         takebacks_remaining,

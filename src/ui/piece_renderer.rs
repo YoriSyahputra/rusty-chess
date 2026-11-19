@@ -642,6 +642,28 @@ fn draw_king(
     draw_basepedestal(painter, c, s, 0.68, fill, outline, accent);
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BotMood {
+    Neutral,
+    SmugWinning,
+    SweatingLosing,
+    MittensLaserMate,
+}
+
+impl BotMood {
+    pub fn from_eval(bot_id: BotId, bot_eval_cp: i32) -> Self {
+        if bot_id == BotId::Mittens && bot_eval_cp > 28_000 {
+            BotMood::MittensLaserMate
+        } else if bot_eval_cp > 300 {
+            BotMood::SmugWinning
+        } else if bot_eval_cp < -300 {
+            BotMood::SweatingLosing
+        } else {
+            BotMood::Neutral
+        }
+    }
+}
+
 /// Menggambar avatar vektor unik untuk tiap persona bot lengkap dengan border glow saat berpikir.
 pub fn draw_bot_avatar(
     painter: &Painter,
@@ -650,16 +672,30 @@ pub fn draw_bot_avatar(
     accent_rgb: [u8; 3],
     is_thinking: bool,
 ) {
+    draw_bot_avatar_with_mood(painter, rect, bot_id, accent_rgb, is_thinking, BotMood::Neutral);
+}
+
+/// Menggambar avatar bot dengan mikro-ekspresi reaktif terhadap evaluasi papan (Feature #19).
+pub fn draw_bot_avatar_with_mood(
+    painter: &Painter,
+    rect: Rect,
+    bot_id: BotId,
+    accent_rgb: [u8; 3],
+    is_thinking: bool,
+    mood: BotMood,
+) {
     let center = rect.center();
     let radius = rect.width().min(rect.height()) * 0.46;
-    let accent = Color32::from_rgb(accent_rgb[0], accent_rgb[1], accent_rgb[2]);
+    let accent = match mood {
+        BotMood::SmugWinning => Color32::from_rgb(0xFF, 0xAA, 0x00),
+        BotMood::MittensLaserMate => Color32::from_rgb(255, 35, 55),
+        _ => Color32::from_rgb(accent_rgb[0], accent_rgb[1], accent_rgb[2]),
+    };
     let dark_bg = Color32::from_rgb(24, 27, 34);
 
-    if is_thinking {
-        let glow_outer =
-            Color32::from_rgba_unmultiplied(accent_rgb[0], accent_rgb[1], accent_rgb[2], 65);
-        let glow_mid =
-            Color32::from_rgba_unmultiplied(accent_rgb[0], accent_rgb[1], accent_rgb[2], 130);
+    if is_thinking || mood != BotMood::Neutral {
+        let glow_outer = accent.gamma_multiply(0.28);
+        let glow_mid = accent.gamma_multiply(0.55);
         painter.circle_filled(center, radius * 1.16, glow_outer);
         painter.circle_stroke(center, radius * 1.07, Stroke::new(2.5_f32, glow_mid));
     }
@@ -697,5 +733,33 @@ pub fn draw_bot_avatar(
             draw_chess_piece(painter, center, radius * 1.25, Color::White, Role::Queen, false);
             painter.circle_stroke(center, radius * 0.86, Stroke::new(1.5_f32, accent));
         }
+    }
+
+    // Reactive mood micro-expressions overlay (Feature #19)
+    match mood {
+        BotMood::SmugWinning => {
+            // Golden sparkles at top-left and top-right
+            let sp1 = Pos2::new(center.x + radius * 0.65, center.y - radius * 0.65);
+            let sp2 = Pos2::new(center.x - radius * 0.68, center.y - radius * 0.52);
+            painter.circle_filled(sp1, 3.5, Color32::from_rgb(0xFF, 0xD7, 0x40));
+            painter.circle_filled(sp2, 2.5, Color32::from_rgb(0xFF, 0xAA, 0x00));
+        }
+        BotMood::SweatingLosing => {
+            // Comic cyan sweat droplets
+            let d1 = Pos2::new(center.x + radius * 0.68, center.y - radius * 0.45);
+            let d2 = Pos2::new(center.x + radius * 0.82, center.y - radius * 0.12);
+            painter.circle_filled(d1, 3.6, Color32::from_rgb(0x00, 0xB8, 0xFF));
+            painter.circle_filled(d2, 2.6, Color32::from_rgb(0x40, 0xD0, 0xFF));
+        }
+        BotMood::MittensLaserMate => {
+            // Eerie glowing crimson eyes when Mittens spots forced mate
+            let e_left = Pos2::new(center.x - radius * 0.24, center.y - radius * 0.14);
+            let e_right = Pos2::new(center.x + radius * 0.24, center.y - radius * 0.14);
+            painter.circle_filled(e_left, 4.2, Color32::from_rgba_unmultiplied(255, 25, 45, 190));
+            painter.circle_filled(e_right, 4.2, Color32::from_rgba_unmultiplied(255, 25, 45, 190));
+            painter.circle_filled(e_left, 2.0, Color32::WHITE);
+            painter.circle_filled(e_right, 2.0, Color32::WHITE);
+        }
+        BotMood::Neutral => {}
     }
 }

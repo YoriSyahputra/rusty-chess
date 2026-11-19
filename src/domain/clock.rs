@@ -235,9 +235,9 @@ impl ChessClock {
         let total_secs = ms / 1000;
         let mins = total_secs / 60;
         let secs = total_secs % 60;
-        if mins == 0 && secs < 10 {
+        if mins == 0 && secs < 20 {
             let tenths = (ms % 1000) / 100;
-            format!("00:0{secs}.{tenths}")
+            format!("00:{secs:02}.{tenths}")
         } else {
             format!("{mins:02}:{secs:02}")
         }

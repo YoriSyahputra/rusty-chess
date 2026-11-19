@@ -1,17 +1,19 @@
 use crate::{
     config::AssistanceMode,
     engine::bot::BotPersona,
-    ui::piece_renderer::draw_bot_avatar,
+    ui::piece_renderer::{draw_bot_avatar_with_mood, BotMood},
 };
 use egui::{Color32, RichText, Rounding, Sense, Stroke, Ui, Vec2};
 
 /// Merender Pinned Header (~112 px) pada SidePanel kanan:
-/// Avatar Bot, Nama, ELO Badge, Active Assistance Mode Pill, dan Speech Bubble Reaktif.
+/// Avatar Bot dengan mikro-ekspresi, Nama, ELO Badge, Active Assistance Mode Pill, dan Speech Bubble Reaktif.
+#[allow(clippy::too_many_arguments)]
 pub fn render_bot_card(
     ui: &mut Ui,
     persona: &BotPersona,
     dialogue_text: &str,
     is_thinking: bool,
+    bot_mood: BotMood,
     assistance_mode: AssistanceMode,
     hints_remaining: Option<u8>,
     takebacks_remaining: Option<u8>,
@@ -32,12 +34,13 @@ pub fn render_bot_card(
             ui.horizontal(|ui| {
                 let (avatar_rect, _) =
                     ui.allocate_exact_size(Vec2::splat(46.0), Sense::hover());
-                draw_bot_avatar(
+                draw_bot_avatar_with_mood(
                     ui.painter(),
                     avatar_rect,
                     persona.id,
                     persona.accent_rgb,
                     is_thinking,
+                    bot_mood,
                 );
 
                 ui.add_space(6.0);

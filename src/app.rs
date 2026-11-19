@@ -28,6 +28,7 @@ use crate::{
             render_puzzles_page, render_review_page, BotsLobbyState, PuzzlesTrainerState,
             ReviewViewState,
         },
+        piece_renderer::BotMood,
         side_panel::{render_player_strip, render_side_panel, show_bot_selector_modal},
         sidebar::{render_left_sidebar, ActiveRoute},
         theme::{apply_global_style_with_mode, BoardTheme, UiTokens},
@@ -74,6 +75,7 @@ pub struct RustyChessApp {
     pub human_turn_started_at: Instant,
     pub last_eval_cp_white: i32,
     pub entered_endgame_announced: bool,
+    pub last_low_time_sec: Option<u64>,
 
     // Modals & UI modes state
     pub zen_mode: bool,
@@ -143,6 +145,7 @@ impl RustyChessApp {
             human_turn_started_at: Instant::now(),
             last_eval_cp_white: 0,
             entered_endgame_announced: false,
+            last_low_time_sec: None,
             zen_mode: false,
             command_palette: CommandPaletteState::default(),
             show_bot_selector: false,
@@ -981,6 +984,19 @@ impl eframe::App for RustyChessApp {
                 };
                 self.bot_dialogue = select_bot_dialogue(self.bot_persona.id, trigger);
                 self.audio.play(SoundEffect::GameOver);
+            } else {
+                // Low-Time Second Tick under 10 seconds (Feature #18)
+                let turn = self.match_state.current_pos.turn();
+                let rem_ms = self.match_state.clock.remaining_ms(turn);
+                if rem_ms > 0 && rem_ms < 10_000 {
+                    let sec = rem_ms / 1000;
+                    if self.last_low_time_sec != Some(sec) {
+                        self.last_low_time_sec = Some(sec);
+                        self.audio.play(SoundEffect::LowTimeTick);
+                    }
+                } else {
+                    self.last_low_time_sec = None;
+                }
             }
         }
 
@@ -1195,6 +1211,12 @@ impl eframe::App for RustyChessApp {
                     let takebacks_rem = self.takebacks_remaining();
                     let earned_crowns = self.profile.crowns_for(self.bot_persona.code);
                     let show_feedback = self.effective_show_move_feedback();
+                    let bot_color = self.match_state.human_color.other();
+                    let bot_eval_cp = match bot_color {
+                        Color::White => self.last_eval_cp_white,
+                        Color::Black => -self.last_eval_cp_white,
+                    };
+                    let bot_mood = BotMood::from_eval(self.bot_persona.id, bot_eval_cp);
 
                     egui::SidePanel::right("control_panel")
                         .exact_width(360.0)
@@ -1206,6 +1228,7 @@ impl eframe::App for RustyChessApp {
                                 &self.bot_persona,
                                 &self.bot_dialogue,
                                 self.is_engine_thinking,
+                                bot_mood,
                                 self.config.assistance_mode,
                                 hints_rem,
                                 takebacks_rem,

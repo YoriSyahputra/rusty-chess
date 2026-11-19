@@ -183,9 +183,21 @@ pub fn render_player_strip(
                         }
                     });
 
-                    // 5. High-Contrast Digital Clock Display (Right-Aligned)
+                    // 5. High-Contrast Digital Clock Display + Low-Time Scramble Urgency (Feature #18)
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let clock_bg = if is_active_turn {
+                        let rem_ms = match_state.clock.remaining_ms(strip_side);
+                        let is_low_time = !match_state.clock.is_unlimited && rem_ms < 20_000;
+                        let pulse_on = (rem_ms / 350) % 2 == 0;
+
+                        let clock_bg = if is_low_time && is_active_turn {
+                            if pulse_on {
+                                Color32::from_rgb(0xE0, 0x3A, 0x32)
+                            } else {
+                                Color32::from_rgb(0xA8, 0x26, 0x20)
+                            }
+                        } else if is_low_time {
+                            Color32::from_rgb(0x6B, 0x22, 0x20)
+                        } else if is_active_turn {
                             if strip_side == Color::White {
                                 Color32::from_rgb(238, 240, 235)
                             } else {
@@ -197,7 +209,9 @@ pub fn render_player_strip(
                             Color32::from_rgb(0xE6, 0xE6, 0xE2)
                         };
 
-                        let clock_fg = if is_active_turn && strip_side == Color::White {
+                        let clock_fg = if is_low_time {
+                            Color32::WHITE
+                        } else if is_active_turn && strip_side == Color::White {
                             Color32::from_rgb(0x21, 0x1F, 0x1C)
                         } else if is_active_turn {
                             Color32::WHITE
@@ -207,11 +221,19 @@ pub fn render_player_strip(
                             Color32::from_rgb(0x66, 0x62, 0x5C)
                         };
 
+                        let clock_display = if is_low_time && is_active_turn {
+                            format!("⏱ {clock_str}")
+                        } else {
+                            clock_str.clone()
+                        };
+
                         egui::Frame::none()
                             .fill(clock_bg)
                             .stroke(Stroke::new(
-                                1.0_f32,
-                                if is_active_turn {
+                                if is_low_time { 1.6_f32 } else { 1.0_f32 },
+                                if is_low_time {
+                                    Color32::from_rgb(255, 115, 105)
+                                } else if is_active_turn {
                                     Color32::from_rgb(0x81, 0xB6, 0x4C)
                                 } else {
                                     Color32::from_rgb(75, 72, 68)
@@ -221,7 +243,7 @@ pub fn render_player_strip(
                             .inner_margin(egui::Margin::symmetric(10.0, 3.0))
                             .show(ui, |ui| {
                                 ui.label(
-                                    RichText::new(&clock_str)
+                                    RichText::new(&clock_display)
                                         .monospace()
                                         .strong()
                                         .size(13.5)
