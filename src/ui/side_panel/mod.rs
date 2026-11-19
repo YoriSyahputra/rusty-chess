@@ -5,7 +5,7 @@ pub mod move_table;
 
 use crate::{
     config::{AssistanceMode, NotationStyle},
-    domain::ChessMatchState,
+    domain::{detect_opening_from_records, ChessMatchState},
     engine::bot::BotPersona,
 };
 use bot_card::render_bot_card;
@@ -60,13 +60,44 @@ pub fn render_side_panel(
 
     ui.add_space(6.0);
 
-    // Reserve exact height for Pinned Footer (96 px) so ScrollArea never overflows vertically!
-    let pinned_footer_reserve = if match_state.outcome.is_game_over() {
-        132.0
+    // Live ECO Opening Badge (Feature #1)
+    let opening_match = detect_opening_from_records(&match_state.history);
+    let opening_badge_h = if let Some(op) = &opening_match {
+        egui::Frame::none()
+            .fill(Color32::from_rgb(0x2B, 0x29, 0x26))
+            .stroke(egui::Stroke::new(1.0_f32, Color32::from_rgb(0x47, 0x44, 0x3F)))
+            .rounding(egui::Rounding::same(5.0_f32))
+            .inner_margin(egui::Margin::symmetric(8.0, 3.0))
+            .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!("📖 {}", op.eco))
+                            .strong()
+                            .size(11.0)
+                            .color(Color32::from_rgb(0xFF, 0xAA, 0x00)),
+                    );
+                    ui.label(
+                        RichText::new(op.name)
+                            .size(11.5)
+                            .color(Color32::from_rgb(0xE8, 0xE5, 0xDF)),
+                    );
+                });
+            });
+        ui.add_space(4.0);
+        26.0
     } else {
-        94.0
+        0.0
     };
-    let remaining_h = (ui.available_height() - pinned_footer_reserve).max(90.0);
+
+    // Reserve exact height for Pinned Footer so ScrollArea never overflows vertically!
+    let pinned_footer_reserve = if match_state.outcome.is_game_over() {
+        134.0
+    } else {
+        96.0
+    };
+    let remaining_h = (ui.available_height() - pinned_footer_reserve).max(80.0);
+    let _ = opening_badge_h;
 
     // 2. Dynamic Center Region: Move Table constrained to remaining_h
     render_move_table(

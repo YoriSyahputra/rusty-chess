@@ -5,8 +5,8 @@ use crate::{
         UserConfig,
     },
     domain::{
-        format_fen, AnnotationColor, ChessMatchState, Color, GameOutcome, Move, PlayerController,
-        Role, TacticalArrow, TimeControl,
+        detect_opening_from_records, format_fen, AnnotationColor, ChessMatchState, Color,
+        GameOutcome, Move, PlayerController, Role, TacticalArrow, TimeControl,
     },
     engine::{
         bot::{
@@ -452,6 +452,37 @@ impl RustyChessApp {
             Color::White => (report.white_accuracy, report.black_accuracy),
             Color::Black => (report.black_accuracy, report.white_accuracy),
         };
+
+        // Harvest human Blunders (??) and Misses (✗) into Personal Mistake Vault (Feature #5)
+        for entry in &report.entries {
+            if entry.side == human_color
+                && matches!(
+                    entry.classification,
+                    crate::engine::review::MoveClassification::Blunder
+                        | crate::engine::review::MoveClassification::Miss
+                )
+            {
+                self.profile.add_mistake_entry(
+                    entry.fen_before.clone(),
+                    entry.side == Color::White,
+                    entry.played_san.clone(),
+                    entry.best_san.clone(),
+                    entry.best_uci.clone(),
+                    entry.classification.label().to_string(),
+                    self.bot_persona.name.to_string(),
+                );
+            }
+        }
+
+        // Detect and record Opening ECO stats (Feature #1)
+        let opening_label = if let Some(op) = detect_opening_from_records(&self.match_state.history)
+        {
+            self.profile.record_opening_result(op.eco, op.name, won);
+            format!("{} • {}", op.eco, op.name)
+        } else {
+            "Unclassified Opening".to_string()
+        };
+
         self.review_state.analyzed_plies_count = self.match_state.history.len();
         self.review_state.selected_ply = report.entries.len();
         self.review_state.report = Some(report);
@@ -460,6 +491,7 @@ impl RustyChessApp {
             opponent_name: self.bot_persona.name.to_string(),
             opponent_elo: self.bot_persona.elo,
             result_label: self.match_state.outcome.description(),
+            opening_name: opening_label,
             player_accuracy: player_acc,
             bot_accuracy: bot_acc,
             moves_count: (self.match_state.history.len() + 1) / 2,
