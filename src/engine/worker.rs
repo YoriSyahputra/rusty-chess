@@ -2,6 +2,7 @@ use crate::engine::{
     bot::{lookup_persona_book_move, BotPersona},
     eval::evaluate_for_white,
     search::{search_best_move, TranspositionTable},
+    uci_bridge::query_uci_best_move,
 };
 use rand::Rng;
 use shakmaty::{Chess, Move, Position};
@@ -12,7 +13,7 @@ use std::{
         Arc,
     },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 #[derive(Debug, Clone)]
@@ -25,6 +26,7 @@ pub enum EngineCommand {
         ply: usize,
         clock_factor: f32,
         enable_thinking_delay: bool,
+        external_uci_path: Option<String>,
     },
     AbortSearch,
     Shutdown,
@@ -78,6 +80,7 @@ impl EngineWorker {
                             ply,
                             clock_factor,
                             enable_thinking_delay,
+                            external_uci_path,
                         } => {
                             worker_abort.store(false, Ordering::SeqCst);
 
@@ -87,15 +90,42 @@ impl EngineWorker {
                                 continue;
                             }
 
+                            // 0. Opsional: Coba External UCI Engine (Feature #24) bila diaktifkan
+                            let uci_result = if let Some(ref path) = external_uci_path {
+                                if !path.trim().is_empty() {
+                                    let t0 = Instant::now();
+                                    let budget = persona.time_budget_ms.clamp(120, 1200);
+                                    query_uci_best_move(path, &pos, budget).ok().map(
+                                        |(mv, eval_w, d)| {
+                                            let ms = t0.elapsed().as_millis() as u64;
+                                            let _ = evt_tx.send(EngineEvent::ThinkingProgress {
+                                                request_id,
+                                                depth: d,
+                                                max_depth: d.max(persona.max_depth),
+                                                eval_cp: eval_w,
+                                                nodes: 1000,
+                                            });
+                                            (mv, eval_w, d, 1000u64, ms, false)
+                                        },
+                                    )
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            };
+
                             // 1. Cek apakah ada langkah Opening Book untuk persona ini (langkah 1-6)
-                            let book_move = if enable_thinking_delay {
+                            let book_move = if uci_result.is_none() && enable_thinking_delay {
                                 lookup_persona_book_move(&pos, &persona, ply)
                             } else {
                                 None
                             };
 
                             let (best_move, eval_cp, depth_reached, nodes_searched, search_ms, close_top_two) =
-                                if let Some(bm) = book_move {
+                                if let Some(res) = uci_result {
+                                    res
+                                } else if let Some(bm) = book_move {
                                     let mut child = pos.clone();
                                     child.play_unchecked(&bm);
                                     let eval_w = evaluate_for_white(&child, &persona.weights);
@@ -235,6 +265,30 @@ impl EngineWorker {
         clock_factor: f32,
         enable_thinking_delay: bool,
     ) {
+        self.request_move_with_uci(
+            request_id,
+            pos,
+            persona,
+            history_hashes,
+            ply,
+            clock_factor,
+            enable_thinking_delay,
+            None,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn request_move_with_uci(
+        &self,
+        request_id: u64,
+        pos: Chess,
+        persona: BotPersona,
+        history_hashes: Vec<u64>,
+        ply: usize,
+        clock_factor: f32,
+        enable_thinking_delay: bool,
+        external_uci_path: Option<String>,
+    ) {
         self.abort_flag.store(false, Ordering::SeqCst);
         let _ = self.cmd_tx.send(EngineCommand::ComputeBestMove {
             request_id,
@@ -244,6 +298,7 @@ impl EngineWorker {
             ply,
             clock_factor,
             enable_thinking_delay,
+            external_uci_path,
         });
     }
 

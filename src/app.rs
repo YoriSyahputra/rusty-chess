@@ -14,6 +14,7 @@ use crate::{
         },
         eval::{evaluate_for_white, material::compute_game_phase},
         review::analyze_match_review,
+        uci_bridge::{detect_system_uci_engine, test_uci_connection},
         worker::{EngineEvent, EngineWorker},
     },
     persistence::{SavedMatchSummary, UserProfile},
@@ -87,6 +88,7 @@ pub struct RustyChessApp {
     pub show_settings_modal: bool,
     pub custom_fen_input: String,
     pub fen_error_msg: Option<String>,
+    pub uci_test_status: Option<String>,
     pub modal_bot_id: BotId,
     pub modal_human_color: Color,
     pub modal_time_control: TimeControl,
@@ -157,6 +159,7 @@ impl RustyChessApp {
             show_settings_modal: false,
             custom_fen_input: String::new(),
             fen_error_msg: None,
+            uci_test_status: None,
             fps_smoothed: 60.0,
             rss_mb: read_process_rss_mb(),
             last_rss_poll: Instant::now(),
@@ -320,7 +323,15 @@ impl RustyChessApp {
         self.thinking_nodes = 0;
         self.search_started_at = Some(Instant::now());
 
-        self.engine_worker.request_move_with_pacing(
+        let uci_path = if self.config.use_external_uci
+            && !self.config.external_uci_path.trim().is_empty()
+        {
+            Some(self.config.external_uci_path.clone())
+        } else {
+            None
+        };
+
+        self.engine_worker.request_move_with_uci(
             self.current_request_id,
             self.match_state.current_pos.clone(),
             self.bot_persona.clone(),
@@ -328,6 +339,7 @@ impl RustyChessApp {
             self.match_state.history.len(),
             self.config.time_control.clock_factor(),
             true,
+            uci_path,
         );
     }
 
@@ -352,7 +364,15 @@ impl RustyChessApp {
         self.thinking_nodes = 0;
         self.search_started_at = Some(Instant::now());
 
-        self.engine_worker.request_move_with_pacing(
+        let uci_path = if self.config.use_external_uci
+            && !self.config.external_uci_path.trim().is_empty()
+        {
+            Some(self.config.external_uci_path.clone())
+        } else {
+            None
+        };
+
+        self.engine_worker.request_move_with_uci(
             self.current_request_id,
             self.match_state.current_pos.clone(),
             hint_persona,
@@ -360,6 +380,7 @@ impl RustyChessApp {
             self.match_state.history.len(),
             1.0,
             false,
+            uci_path,
         );
     }
 
@@ -715,8 +736,11 @@ impl RustyChessApp {
             .collapsible(false)
             .resizable(false)
             .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
-            .fixed_size(Vec2::new(460.0, 390.0))
+            .fixed_size(Vec2::new(480.0, 460.0))
             .show(ctx, |ui| {
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
                 ui.label(RichText::new("Board & Visual Appearance").strong().size(14.5));
                 ui.add_space(4.0);
 
@@ -833,6 +857,57 @@ impl RustyChessApp {
                     }
                 });
 
+                ui.add_space(6.0);
+                ui.separator();
+                ui.label(
+                    RichText::new("🔌 External UCI Engine Bridge (Stockfish / Komodo)")
+                        .strong()
+                        .size(14.0),
+                );
+                ui.checkbox(
+                    &mut self.config.use_external_uci,
+                    "Use External UCI Engine (auto-falls back to built-in Rust engine on error)",
+                );
+                ui.horizontal(|ui| {
+                    ui.label("Binary:");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.config.external_uci_path)
+                            .hint_text("/usr/games/stockfish")
+                            .desired_width(220.0)
+                            .font(egui::TextStyle::Monospace),
+                    );
+                    if ui.small_button("🔍 Detect").clicked() {
+                        if let Some(found) = detect_system_uci_engine() {
+                            self.config.external_uci_path = found.clone();
+                            self.uci_test_status = Some(format!("✓ Found: {found}"));
+                        } else {
+                            self.uci_test_status =
+                                Some("No Stockfish/UCI binary found in system PATH.".to_string());
+                        }
+                    }
+                    if ui.small_button("🔌 Test").clicked() {
+                        match test_uci_connection(&self.config.external_uci_path) {
+                            Ok(name) => {
+                                self.uci_test_status = Some(format!("✓ Connected: {name}"));
+                            }
+                            Err(err) => {
+                                self.uci_test_status = Some(format!("✗ {err}"));
+                            }
+                        }
+                    }
+                });
+                if let Some(status) = &self.uci_test_status {
+                    ui.label(
+                        RichText::new(status)
+                            .size(11.5)
+                            .color(if status.starts_with('✓') {
+                                Color32::from_rgb(0x81, 0xB6, 0x4C)
+                            } else {
+                                Color32::from_rgb(235, 115, 95)
+                            }),
+                    );
+                }
+
                 ui.add_space(8.0);
                 ui.separator();
                 ui.horizontal(|ui| {
@@ -845,6 +920,7 @@ impl RustyChessApp {
                     {
                         reset_requested = true;
                     }
+                });
                 });
             });
 

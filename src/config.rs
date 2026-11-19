@@ -241,6 +241,8 @@ pub struct UserConfig {
     pub time_control: TimeControl,
     pub assistance_mode: AssistanceMode,
     pub custom_assistance: CustomAssistanceConfig,
+    pub use_external_uci: bool,
+    pub external_uci_path: String,
 }
 
 impl Default for UserConfig {
@@ -264,6 +266,8 @@ impl Default for UserConfig {
             time_control: TimeControl::Rapid10_0,
             assistance_mode: AssistanceMode::Challenge,
             custom_assistance: CustomAssistanceConfig::default(),
+            use_external_uci: false,
+            external_uci_path: String::new(),
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    domain::notation::position_zobrist_hash,
+    domain::notation::{format_san, format_uci, position_zobrist_hash},
     engine::{
         bot::BotPersona,
         eval::EvalWeights,
@@ -11,7 +11,7 @@ use crate::{
     },
 };
 use rand::Rng;
-use shakmaty::{Chess, Color, Move, Position};
+use shakmaty::{Chess, Color, Move, Position, Square};
 use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::{Duration, Instant},
@@ -410,4 +410,84 @@ fn sample_root_move_softmax(
     }
 
     best
+}
+
+#[derive(Debug, Clone)]
+pub struct MultiPvLine {
+    pub mv: Move,
+    pub san: String,
+    pub uci: String,
+    pub eval_cp_white: i32,
+    pub from: Square,
+    pub to: Square,
+    pub pv_sans: Vec<String>,
+}
+
+/// Menghitung Top-N garis variasi terbaik (`Multi-PV`) untuk posisi saat ini beserta
+/// evaluasi centipawn (perspektif Putih) dan kelanjutan PV hingga 4 ply (Feature #23).
+pub fn compute_multipv_lines(pos: &Chess, num_lines: usize, max_depth: u8) -> Vec<MultiPvLine> {
+    if pos.is_game_over() || num_lines == 0 {
+        return Vec::new();
+    }
+
+    let mut persona = BotPersona::magnus();
+    persona.max_depth = max_depth.clamp(1, 5);
+    persona.time_budget_ms = 140;
+    persona.softmax_temp_cp = 0.0;
+    persona.noise_cp = 0;
+
+    let mut tt = TranspositionTable::new();
+    let abort = AtomicBool::new(false);
+
+    let Some(outcome) = search_best_move(pos, &persona, &[], &mut tt, &abort, |_, _, _, _| {})
+    else {
+        return Vec::new();
+    };
+
+    let root_turn = pos.turn();
+    let mut lines = Vec::new();
+
+    for (mv, score_side) in outcome.root_candidates.into_iter().take(num_lines) {
+        let eval_cp_white = match root_turn {
+            Color::White => score_side,
+            Color::Black => -score_side,
+        };
+        let san = format_san(pos, &mv);
+        let uci = format_uci(&mv);
+        let from = mv.from().unwrap_or_else(|| mv.to());
+        let to = mv.to();
+
+        // Ekstrak kelanjutan PV hingga 4 ply dari Transposition Table
+        let mut pv_sans = vec![san.clone()];
+        let mut sim = pos.clone();
+        sim.play_unchecked(&mv);
+        for _ in 0..3 {
+            if sim.is_game_over() {
+                break;
+            }
+            let h = position_zobrist_hash(&sim);
+            if let Some(entry) = tt.probe(h) {
+                if let Some(ref next_mv) = entry.best_move {
+                    if sim.is_legal(next_mv) {
+                        pv_sans.push(format_san(&sim, next_mv));
+                        sim.play_unchecked(next_mv);
+                        continue;
+                    }
+                }
+            }
+            break;
+        }
+
+        lines.push(MultiPvLine {
+            mv,
+            san,
+            uci,
+            eval_cp_white,
+            from,
+            to,
+            pv_sans,
+        });
+    }
+
+    lines
 }

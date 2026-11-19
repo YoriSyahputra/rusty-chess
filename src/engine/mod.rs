@@ -3,6 +3,7 @@ pub mod coach;
 pub mod eval;
 pub mod review;
 pub mod search;
+pub mod uci_bridge;
 pub mod worker;
 
 pub use bot::{
@@ -16,7 +17,11 @@ pub use review::{
     MoveClassification, PlyReviewEntry,
 };
 pub use search::{
-    quiescence_search, search_best_move, SearchHeuristics, SearchOutcome, TTEntry, TTFlag,
-    TranspositionTable, MATE_SCORE, MATE_THRESHOLD,
+    compute_multipv_lines, quiescence_search, search_best_move, MultiPvLine, SearchHeuristics,
+    SearchOutcome, TTEntry, TTFlag, TranspositionTable, MATE_SCORE, MATE_THRESHOLD,
+};
+pub use uci_bridge::{
+    detect_system_uci_engine, parse_uci_depth, parse_uci_score_cp, query_uci_best_move,
+    test_uci_connection,
 };
 pub use worker::{compute_target_think_ms, EngineCommand, EngineEvent, EngineWorker};

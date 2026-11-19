@@ -1,22 +1,25 @@
 use crate::{
     config::UserConfig,
     domain::{
-        detect_opening_from_records, format_uci, parse_fen, AnnotationColor, ChessMatchState,
-        Color, TacticalArrow,
+        detect_opening_from_records, format_fen, format_uci, parse_fen, AnnotationColor,
+        ChessMatchState, Color, PlayerController, TacticalArrow,
     },
     engine::{
         coach::{explain_move, CoachExplanation},
         review::{analyze_match_review, GameReviewReport, MoveClassification},
+        search::{compute_multipv_lines, MultiPvLine},
     },
     ui::{
         board_view::{
             render_board_grid, render_move_classification_badge, render_xray_heatmap,
             BoardInteractionState,
         },
+        eval_bar::EvalBarState,
         theme::UiTokens,
     },
 };
 use egui::{Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Sense, Stroke, Ui, Vec2};
+use shakmaty::Position;
 
 #[derive(Default)]
 pub struct ReviewViewState {
@@ -30,6 +33,14 @@ pub struct ReviewViewState {
     pub retry_status_msg: Option<String>,
     pub retry_board_state: Option<ChessMatchState>,
     pub retry_board_ui: BoardInteractionState,
+
+    // Feature #23: Multi-PV Top 3 Live Engine Lines & Free Analysis Sandbox
+    pub sandbox_active: bool,
+    pub sandbox_state: Option<ChessMatchState>,
+    pub sandbox_ui: BoardInteractionState,
+    pub sandbox_eval_bar: EvalBarState,
+    pub cached_multipv_fen: String,
+    pub cached_multipv: Vec<MultiPvLine>,
 }
 
 impl ReviewViewState {
@@ -42,6 +53,48 @@ impl ReviewViewState {
             self.retry_mode_active = false;
             self.retry_status_msg = None;
         }
+    }
+
+    pub fn enter_sandbox(&mut self, match_state: &ChessMatchState) {
+        let fen = format_fen(&match_state.displayed_position());
+        if let Ok(mut st) = ChessMatchState::from_fen(&fen, Color::White) {
+            st.white_controller = PlayerController::Human;
+            st.black_controller = PlayerController::Human;
+            self.sandbox_state = Some(st);
+            self.sandbox_ui.reset();
+            self.cached_multipv_fen.clear();
+            self.cached_multipv.clear();
+            self.sandbox_active = true;
+            self.retry_mode_active = false;
+        }
+    }
+
+    pub fn refresh_sandbox_multipv(&mut self) {
+        let Some(st) = &mut self.sandbox_state else {
+            return;
+        };
+        let fen = format_fen(&st.current_pos);
+        if self.cached_multipv_fen == fen && !self.cached_multipv.is_empty() {
+            return;
+        }
+        let lines = compute_multipv_lines(&st.current_pos, 3, 3);
+        if let Some(top) = lines.first() {
+            self.sandbox_eval_bar.set_eval_cp(top.eval_cp_white);
+        }
+        // Populate color-coded Top-3 Multi-PV arrows (Green #1, Blue #2, Yellow #3)
+        st.arrows.clear();
+        let colors = [
+            AnnotationColor::Green,
+            AnnotationColor::Blue,
+            AnnotationColor::Yellow,
+        ];
+        for (i, line) in lines.iter().enumerate() {
+            if let Some(&col) = colors.get(i) {
+                st.arrows.push(TacticalArrow::new(line.from, line.to, col));
+            }
+        }
+        self.cached_multipv = lines;
+        self.cached_multipv_fen = fen;
     }
 }
 
@@ -68,7 +121,198 @@ pub fn render_review_page(
         .exact_width(380.0)
         .resizable(false)
         .show_inside(ui, |ui| {
-            ui.add_space(8.0);
+            ui.add_space(6.0);
+
+            // Top Mode Switcher: Post-Game Review vs Free Multi-PV Analysis Sandbox (Feature #23)
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_label(
+                        !review_state.sandbox_active,
+                        RichText::new("📊 Game Review").strong().size(12.5),
+                    )
+                    .clicked()
+                {
+                    review_state.sandbox_active = false;
+                }
+                if ui
+                    .selectable_label(
+                        review_state.sandbox_active,
+                        RichText::new("🔬 Multi-PV Analysis Sandbox")
+                            .strong()
+                            .size(12.5),
+                    )
+                    .clicked()
+                {
+                    review_state.enter_sandbox(match_state);
+                }
+            });
+
+            ui.add_space(6.0);
+
+            if review_state.sandbox_active {
+                if review_state.sandbox_state.is_none() {
+                    review_state.enter_sandbox(match_state);
+                }
+                review_state.refresh_sandbox_multipv();
+
+                egui::Frame::none()
+                    .fill(tokens.bg_surface)
+                    .stroke(Stroke::new(1.5_f32, tokens.accent_info))
+                    .rounding(Rounding::same(8.0_f32))
+                    .inner_margin(egui::Margin::same(10.0))
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(
+                            RichText::new("🔬 Top 3 Multi-PV Engine Lines")
+                                .strong()
+                                .size(15.5)
+                                .color(tokens.text_primary),
+                        );
+                        ui.label(
+                            RichText::new(
+                                "Play moves freely for both sides or click any engine line to explore variations.",
+                            )
+                            .size(11.5)
+                            .color(tokens.text_secondary),
+                        );
+                        ui.add_space(8.0);
+
+                        let line_colors = [
+                            Color32::from_rgb(0x81, 0xB6, 0x4C),
+                            Color32::from_rgb(0x4A, 0x90, 0xE2),
+                            Color32::from_rgb(0xE8, 0xB9, 0x31),
+                        ];
+                        let mut play_line_mv: Option<crate::domain::Move> = None;
+
+                        if review_state.cached_multipv.is_empty() {
+                            ui.label(
+                                RichText::new("Position is game over — no legal moves available.")
+                                    .italics()
+                                    .size(12.0)
+                                    .color(tokens.text_secondary),
+                            );
+                        } else {
+                            for (idx, line) in review_state.cached_multipv.iter().enumerate() {
+                                let col = line_colors[idx.min(2)];
+                                let score_str = if line.eval_cp_white.abs() >= 25_000 {
+                                    if line.eval_cp_white > 0 {
+                                        "+M".to_string()
+                                    } else {
+                                        "-M".to_string()
+                                    }
+                                } else {
+                                    format!("{:+.2}", line.eval_cp_white as f32 / 100.0)
+                                };
+                                let pv_str = line.pv_sans.join(" ");
+                                let row_txt = format!("#{}  [{:>6}]  {}", idx + 1, score_str, pv_str);
+
+                                let resp = egui::Frame::none()
+                                    .fill(tokens.bg_canvas)
+                                    .stroke(Stroke::new(1.0_f32, col.gamma_multiply(0.7)))
+                                    .rounding(Rounding::same(6.0_f32))
+                                    .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+                                    .show(ui, |ui| {
+                                        ui.set_min_width(ui.available_width());
+                                        ui.label(
+                                            RichText::new(row_txt)
+                                                .monospace()
+                                                .strong()
+                                                .size(12.5)
+                                                .color(col),
+                                        );
+                                    })
+                                    .response
+                                    .interact(Sense::click());
+                                if resp.clicked() {
+                                    play_line_mv = Some(line.mv.clone());
+                                }
+                                ui.add_space(5.0);
+                            }
+                        }
+
+                        if let Some(mv) = play_line_mv {
+                            if let Some(st) = &mut review_state.sandbox_state {
+                                if st.apply_move(mv, 0, 100).is_ok() {
+                                    review_state.cached_multipv_fen.clear();
+                                }
+                            }
+                        }
+
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            if ui.button("↩ Undo").clicked() {
+                                if let Some(st) = &mut review_state.sandbox_state {
+                                    if !st.history.is_empty() {
+                                        st.history.pop();
+                                        if st.position_hashes.len() > 1 {
+                                            st.position_hashes.pop();
+                                        }
+                                        let mut pos = st.initial_pos.clone();
+                                        for rec in &st.history {
+                                            pos.play_unchecked(&rec.mv);
+                                        }
+                                        st.current_pos = pos;
+                                        st.viewed_ply = st.history.len();
+                                        st.outcome = crate::domain::GameOutcome::Ongoing;
+                                        st.last_move = st.history.last().map(|r| {
+                                            (r.mv.from().unwrap_or_else(|| r.mv.to()), r.mv.to())
+                                        });
+                                        review_state.cached_multipv_fen.clear();
+                                    }
+                                }
+                            }
+                            if ui.button("🔄 Reset to Main Line").clicked() {
+                                review_state.enter_sandbox(match_state);
+                            }
+                        });
+                    });
+
+                ui.add_space(8.0);
+
+                // Sandbox variation trail
+                let rem_h = (ui.available_height() - 12.0).max(90.0);
+                egui::Frame::none()
+                    .fill(tokens.bg_surface)
+                    .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
+                    .rounding(Rounding::same(8.0_f32))
+                    .inner_margin(egui::Margin::same(8.0))
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(
+                            RichText::new("Exploration Trail")
+                                .strong()
+                                .size(12.5)
+                                .color(tokens.text_primary),
+                        );
+                        ScrollArea::vertical()
+                            .id_salt("sandbox_trail_scroll")
+                            .max_height(rem_h)
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                let mut trail = String::new();
+                                if let Some(st) = &review_state.sandbox_state {
+                                    for (i, rec) in st.history.iter().enumerate() {
+                                        if i % 2 == 0 {
+                                            trail.push_str(&format!("{}. {} ", (i / 2) + 1, rec.san));
+                                        } else {
+                                            trail.push_str(&format!("{}   ", rec.san));
+                                        }
+                                    }
+                                }
+                                if trail.is_empty() {
+                                    trail = "Make moves on the board or click a Top-3 line above."
+                                        .to_string();
+                                }
+                                ui.label(
+                                    RichText::new(trail)
+                                        .monospace()
+                                        .size(12.0)
+                                        .color(tokens.text_secondary),
+                                );
+                            });
+                    });
+                return;
+            }
 
             // 1. Accuracy Score Cards & Estimated Game Rating
             egui::Frame::none()
@@ -558,8 +802,39 @@ pub fn render_review_page(
             });
         });
 
-    // Left Central Column: Interactive Review Board + Best Move Arrow or Retry Mistake Drill
+    // Left Central Column: Interactive Review Board, Multi-PV Sandbox, or Retry Mistake Drill
     egui::CentralPanel::default().show_inside(ui, |ui| {
+        if review_state.sandbox_active {
+            review_state.refresh_sandbox_multipv();
+            let avail = ui.available_size();
+            let eval_w = 34.0;
+            let board_size = (avail.x - eval_w - 24.0).min(avail.y - 48.0).max(320.0);
+            let pad_x = ((avail.x - (board_size + eval_w)) * 0.5).max(8.0);
+            let pad_y = ((avail.y - board_size) * 0.5).max(8.0);
+
+            ui.add_space(pad_y);
+            ui.horizontal(|ui| {
+                ui.add_space(pad_x);
+                review_state
+                    .sandbox_eval_bar
+                    .ui(ui, board_size, config.board_flipped);
+                ui.add_space(6.0);
+                if let Some(st) = &mut review_state.sandbox_state {
+                    if let Some(mv) = review_state.sandbox_ui.ui_with_config(
+                        ui,
+                        board_size,
+                        st,
+                        config,
+                    ) {
+                        if st.apply_move(mv, 0, 100).is_ok() {
+                            review_state.cached_multipv_fen.clear();
+                        }
+                    }
+                }
+            });
+            return;
+        }
+
         let avail = ui.available_size();
         let board_size = (avail.x - 24.0).min(avail.y - 48.0).max(320.0);
         let pad_x = ((avail.x - board_size) * 0.5).max(8.0);
