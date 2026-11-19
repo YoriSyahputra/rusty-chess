@@ -10,6 +10,8 @@ pub struct TopBarActions {
     pub open_new_game_modal: bool,
     pub open_fen_pgn_modal: bool,
     pub flip_board_toggled: bool,
+    pub toggle_zen_mode: bool,
+    pub open_command_palette: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -106,6 +108,22 @@ pub fn render_top_bar(
             .clicked()
         {
             config.show_xray_heatmap = !config.show_xray_heatmap;
+        }
+
+        if ui
+            .button(RichText::new("🧘 Zen").size(12.5))
+            .on_hover_text("Toggle distraction-free Zen Mode (Shortcut: Z)")
+            .clicked()
+        {
+            actions.toggle_zen_mode = true;
+        }
+
+        if ui
+            .button(RichText::new("⌘ Ctrl+K").size(12.0))
+            .on_hover_text("Open Command Palette & Keyboard Move Entry")
+            .clicked()
+        {
+            actions.open_command_palette = true;
         }
 
         if ui

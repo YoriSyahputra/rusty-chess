@@ -1,7 +1,8 @@
 use rusty_chess::{
-    domain::{detect_opening, parse_fen},
+    domain::{detect_opening, parse_fen, parse_san},
+    engine::{coach::explain_move, review::MoveClassification},
     persistence::UserProfile,
-    ui::board_view::compute_square_control_map,
+    ui::{board_textures::generate_procedural_board_overlay, board_view::compute_square_control_map, theme::BoardTheme},
 };
 use shakmaty::{Chess, Square};
 
@@ -84,4 +85,23 @@ fn test_mistake_vault_spaced_repetition_and_chess_dna() {
     assert!((0.2..=1.0).contains(&dna.opening));
     assert!((0.2..=1.0).contains(&dna.tactics));
     assert!(!dna.archetype.is_empty());
+}
+
+#[test]
+fn test_natural_language_coach_and_procedural_board_textures() {
+    let pos = parse_fen("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+        .expect("valid FEN");
+    let blunder_mv = parse_san(&pos, "Qh5").expect("legal");
+    let best_mv = parse_san(&pos, "Nf3").expect("legal");
+
+    let exp = explain_move(&pos, &blunder_mv, &best_mv, MoveClassification::Mistake);
+    assert!(!exp.headline.is_empty());
+    assert!(!exp.detail.is_empty());
+    assert!(!exp.refutation_sans.is_empty());
+
+    for &theme in BoardTheme::all() {
+        let img = generate_procedural_board_overlay(theme, 64);
+        assert_eq!(img.size, [64, 64]);
+        assert_eq!(img.pixels.len(), 64 * 64);
+    }
 }

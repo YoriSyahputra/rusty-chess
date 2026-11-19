@@ -4,7 +4,10 @@ use crate::{
         detect_opening_from_records, format_uci, parse_fen, AnnotationColor, ChessMatchState,
         Color, TacticalArrow,
     },
-    engine::review::{analyze_match_review, GameReviewReport, MoveClassification},
+    engine::{
+        coach::{explain_move, CoachExplanation},
+        review::{analyze_match_review, GameReviewReport, MoveClassification},
+    },
     ui::{
         board_view::{render_board_grid, render_xray_heatmap, BoardInteractionState},
         theme::UiTokens,
@@ -17,6 +20,9 @@ pub struct ReviewViewState {
     pub report: Option<GameReviewReport>,
     pub analyzed_plies_count: usize,
     pub selected_ply: usize,
+    pub cached_coach_ply: usize,
+    pub cached_coach: Option<CoachExplanation>,
+    pub refutation_step: Option<usize>,
     pub retry_mode_active: bool,
     pub retry_status_msg: Option<String>,
     pub retry_board_state: Option<ChessMatchState>,
@@ -275,11 +281,25 @@ pub fn render_review_page(
 
             ui.add_space(6.0);
 
-            // 3. Selected Ply Coach Insights & Retry Mistake Drill Button
+            // 3. Selected Ply Coach Insights ("Why Was That Bad?") & Refutation Player (Feature #8)
             if let Some(entry) = report
                 .entries
                 .get(review_state.selected_ply.saturating_sub(1))
             {
+                if review_state.cached_coach_ply != entry.ply || review_state.cached_coach.is_none()
+                {
+                    if let Ok(pos_before) = parse_fen(&entry.fen_before) {
+                        review_state.cached_coach = Some(explain_move(
+                            &pos_before,
+                            &entry.played_mv,
+                            &entry.best_mv,
+                            entry.classification,
+                        ));
+                        review_state.cached_coach_ply = entry.ply;
+                        review_state.refutation_step = None;
+                    }
+                }
+
                 let c_rgb = entry.classification.rgb();
                 let badge_color = Color32::from_rgb(c_rgb[0], c_rgb[1], c_rgb[2]);
 
@@ -305,7 +325,44 @@ pub fn render_review_page(
                             );
                         });
 
-                        if entry.played_san != entry.best_san {
+                        if let Some(coach) = &review_state.cached_coach {
+                            ui.label(
+                                RichText::new(format!("🎓 {}", coach.headline))
+                                    .strong()
+                                    .size(12.0)
+                                    .color(tokens.text_primary),
+                            );
+                            ui.label(
+                                RichText::new(&coach.detail)
+                                    .size(11.5)
+                                    .color(tokens.text_secondary),
+                            );
+                            if !coach.refutation_sans.is_empty() {
+                                ui.horizontal(|ui| {
+                                    let line_txt = coach.refutation_sans.join(" → ");
+                                    ui.label(
+                                        RichText::new(format!("Refutation: {line_txt}"))
+                                            .monospace()
+                                            .size(11.0)
+                                            .color(Color32::from_rgb(0xFF, 0xAA, 0x00)),
+                                    );
+                                });
+                                ui.horizontal(|ui| {
+                                    if ui.small_button("▶ Show Refutation").clicked() {
+                                        let next_s = review_state
+                                            .refutation_step
+                                            .map(|s| (s + 1) % coach.refutation_fens.len())
+                                            .unwrap_or(1.min(coach.refutation_fens.len() - 1));
+                                        review_state.refutation_step = Some(next_s);
+                                    }
+                                    if review_state.refutation_step.is_some()
+                                        && ui.small_button("✕ Reset View").clicked()
+                                    {
+                                        review_state.refutation_step = None;
+                                    }
+                                });
+                            }
+                        } else if entry.played_san != entry.best_san {
                             ui.label(
                                 RichText::new(format!(
                                     "Best engine move was {} (shown with green arrow)",
@@ -313,12 +370,6 @@ pub fn render_review_page(
                                 ))
                                 .size(12.0)
                                 .color(tokens.text_secondary),
-                            );
-                        } else {
-                            ui.label(
-                                RichText::new("Matched the top engine choice!")
-                                    .size(12.0)
-                                    .color(tokens.text_secondary),
                             );
                         }
 
@@ -548,7 +599,16 @@ pub fn render_review_page(
             let (b_rect, _) =
                 ui.allocate_exact_size(Vec2::splat(board_size), Sense::hover());
 
-            let (display_pos, last_mv, best_arrow) = if let Some(entry) = report
+            let (display_pos, last_mv, best_arrow) = if let (Some(step), Some(coach)) =
+                (review_state.refutation_step, &review_state.cached_coach)
+            {
+                let pos = coach
+                    .refutation_fens
+                    .get(step)
+                    .and_then(|f| parse_fen(f).ok())
+                    .unwrap_or_else(|| match_state.displayed_position());
+                (pos, None, None)
+            } else if let Some(entry) = report
                 .entries
                 .get(review_state.selected_ply.saturating_sub(1))
             {

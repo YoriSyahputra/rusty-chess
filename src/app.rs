@@ -20,7 +20,9 @@ use crate::{
     ui::{
         board_view::BoardInteractionState,
         eval_bar::EvalBarState,
-        modals::show_game_over_modal,
+        modals::{
+            show_command_palette, show_game_over_modal, CommandPaletteState, PaletteCommand,
+        },
         pages::{
             render_analytics_page, render_bots_lobby, render_home_page, render_play_hub,
             render_puzzles_page, render_review_page, BotsLobbyState, PuzzlesTrainerState,
@@ -73,7 +75,9 @@ pub struct RustyChessApp {
     pub last_eval_cp_white: i32,
     pub entered_endgame_announced: bool,
 
-    // Modals state
+    // Modals & UI modes state
+    pub zen_mode: bool,
+    pub command_palette: CommandPaletteState,
     pub show_bot_selector: bool,
     pub show_fen_pgn_modal: bool,
     pub show_settings_modal: bool,
@@ -139,6 +143,8 @@ impl RustyChessApp {
             human_turn_started_at: Instant::now(),
             last_eval_cp_white: 0,
             entered_endgame_announced: false,
+            zen_mode: false,
+            command_palette: CommandPaletteState::default(),
             show_bot_selector: false,
             show_fen_pgn_modal: false,
             show_settings_modal: false,
@@ -624,7 +630,15 @@ impl RustyChessApp {
     }
 
     fn handle_keyboard_shortcuts(&mut self, ctx: &Context) {
-        if self.show_fen_pgn_modal
+        // Ctrl+K toggles Command Palette from anywhere
+        let ctrl_k = ctx.input(|i| (i.modifiers.ctrl || i.modifiers.command) && i.key_pressed(Key::K));
+        if ctrl_k {
+            self.command_palette.toggle();
+            return;
+        }
+
+        if self.command_palette.open
+            || self.show_fen_pgn_modal
             || self.show_bot_selector
             || self.show_settings_modal
             || self.show_game_over
@@ -649,6 +663,9 @@ impl RustyChessApp {
             }
             if i.key_pressed(Key::X) {
                 self.config.show_xray_heatmap = !self.config.show_xray_heatmap;
+            }
+            if i.key_pressed(Key::Z) && self.active_route == ActiveRoute::Match {
+                self.zen_mode = !self.zen_mode;
             }
         });
     }
@@ -937,40 +954,43 @@ impl eframe::App for RustyChessApp {
 
         self.handle_keyboard_shortcuts(ctx);
 
-        // Persistent Left Navigation Sidebar
+        // Persistent Left Navigation Sidebar (hidden during Zen Mode in Match)
+        let in_zen_match = self.zen_mode && self.active_route == ActiveRoute::Match;
         let win_w = ctx.screen_rect().width();
         let compact_sidebar = self.config.sidebar_collapsed.unwrap_or(win_w < 1100.0);
         let sidebar_w = if compact_sidebar { 60.0 } else { 168.0 };
         let tokens = UiTokens::for_mode(self.config.dark_mode);
 
-        egui::SidePanel::left("left_navigation_sidebar")
-            .exact_width(sidebar_w)
-            .resizable(false)
-            .frame(
-                egui::Frame::none()
-                    .fill(tokens.bg_sidebar)
-                    .stroke(egui::Stroke::new(1.0_f32, tokens.border_subtle)),
-            )
-            .show(ctx, |ui| {
-                let nav = render_left_sidebar(
-                    ui,
-                    self.active_route,
-                    &mut self.config,
-                    self.has_active_match,
-                    compact_sidebar,
-                );
-                if let Some(next_route) = nav.navigate_to {
-                    self.active_route = next_route;
-                }
-                if nav.toggled_theme_mode {
-                    apply_global_style_with_mode(ctx, self.config.dark_mode);
-                    self.profile.config = self.config.clone();
-                    self.profile.save();
-                }
-                if nav.open_settings_modal {
-                    self.show_settings_modal = true;
-                }
-            });
+        if !in_zen_match {
+            egui::SidePanel::left("left_navigation_sidebar")
+                .exact_width(sidebar_w)
+                .resizable(false)
+                .frame(
+                    egui::Frame::none()
+                        .fill(tokens.bg_sidebar)
+                        .stroke(egui::Stroke::new(1.0_f32, tokens.border_subtle)),
+                )
+                .show(ctx, |ui| {
+                    let nav = render_left_sidebar(
+                        ui,
+                        self.active_route,
+                        &mut self.config,
+                        self.has_active_match,
+                        compact_sidebar,
+                    );
+                    if let Some(next_route) = nav.navigate_to {
+                        self.active_route = next_route;
+                    }
+                    if nav.toggled_theme_mode {
+                        apply_global_style_with_mode(ctx, self.config.dark_mode);
+                        self.profile.config = self.config.clone();
+                        self.profile.save();
+                    }
+                    if nav.open_settings_modal {
+                        self.show_settings_modal = true;
+                    }
+                });
+        }
 
         match self.active_route {
             ActiveRoute::Home => {
@@ -1098,95 +1118,113 @@ impl eframe::App for RustyChessApp {
             }
 
             ActiveRoute::Match => {
-                egui::TopBottomPanel::top("top_bar")
-                    .exact_height(40.0)
-                    .show(ctx, |ui| {
-                        let top_actions = render_top_bar(
-                            ui,
-                            &mut self.config,
-                            self.is_engine_thinking,
-                            self.thinking_depth,
-                            self.thinking_max_depth,
-                            self.last_nps_kns,
-                            self.fps_smoothed,
-                            self.rss_mb,
-                        );
-
-                        if top_actions.open_new_game_modal {
-                            self.active_route = ActiveRoute::PlayBots;
-                        }
-                        if top_actions.open_fen_pgn_modal {
-                            self.custom_fen_input =
-                                format_fen(&self.match_state.displayed_position());
-                            self.fen_error_msg = None;
-                            self.show_fen_pgn_modal = true;
-                        }
-                    });
-
-                let hints_rem = self.hints_remaining();
-                let takebacks_rem = self.takebacks_remaining();
-                let earned_crowns = self.profile.crowns_for(self.bot_persona.code);
-                let show_feedback = self.effective_show_move_feedback();
-
-                egui::SidePanel::right("control_panel")
-                    .exact_width(360.0)
-                    .resizable(false)
-                    .show(ctx, |ui| {
-                        let side_actions = render_side_panel(
-                            ui,
-                            &mut self.match_state,
-                            &self.bot_persona,
-                            &self.bot_dialogue,
-                            self.is_engine_thinking,
-                            self.config.assistance_mode,
-                            hints_rem,
-                            takebacks_rem,
-                            earned_crowns,
-                            self.config.notation_style,
-                            show_feedback,
-                        );
-
-                        if side_actions.open_bot_selector {
-                            self.active_route = ActiveRoute::PlayBots;
-                        }
-                        if side_actions.open_review {
-                            self.active_route = ActiveRoute::Review;
-                        }
-                        if side_actions.flip_board {
-                            self.config.board_flipped = !self.config.board_flipped;
-                        }
-                        if side_actions.undo_takeback {
-                            if self.takebacks_remaining().unwrap_or(99) > 0 {
-                                self.takebacks_used = self.takebacks_used.saturating_add(1);
-                                self.abort_engine();
-                                self.match_state.undo_move_pair();
-                                self.board_ui.reset();
-                                let eval_cp = evaluate_for_white(
-                                    &self.match_state.current_pos,
-                                    &self.bot_persona.weights,
-                                );
-                                self.eval_bar.set_eval_cp(eval_cp);
-                                self.last_eval_cp_white = eval_cp;
-                            }
-                        }
-                        if side_actions.request_hint {
-                            self.dispatch_hint_search();
-                        }
-                        if side_actions.resign_game {
-                            self.abort_engine();
-                            let human_color = self.match_state.human_color;
-                            self.match_state.resign(human_color);
-                            self.record_match_completion_if_needed();
-                            self.bot_dialogue = select_bot_dialogue(
-                                self.bot_persona.id,
-                                DialogueTrigger::GameOverWin,
+                if !in_zen_match {
+                    egui::TopBottomPanel::top("top_bar")
+                        .exact_height(40.0)
+                        .show(ctx, |ui| {
+                            let top_actions = render_top_bar(
+                                ui,
+                                &mut self.config,
+                                self.is_engine_thinking,
+                                self.thinking_depth,
+                                self.thinking_max_depth,
+                                self.last_nps_kns,
+                                self.fps_smoothed,
+                                self.rss_mb,
                             );
-                            self.audio.play(SoundEffect::GameOver);
-                        }
-                    });
+
+                            if top_actions.open_new_game_modal {
+                                self.active_route = ActiveRoute::PlayBots;
+                            }
+                            if top_actions.open_fen_pgn_modal {
+                                self.custom_fen_input =
+                                    format_fen(&self.match_state.displayed_position());
+                                self.fen_error_msg = None;
+                                self.show_fen_pgn_modal = true;
+                            }
+                            if top_actions.toggle_zen_mode {
+                                self.zen_mode = !self.zen_mode;
+                            }
+                            if top_actions.open_command_palette {
+                                self.command_palette.toggle();
+                            }
+                        });
+
+                    let hints_rem = self.hints_remaining();
+                    let takebacks_rem = self.takebacks_remaining();
+                    let earned_crowns = self.profile.crowns_for(self.bot_persona.code);
+                    let show_feedback = self.effective_show_move_feedback();
+
+                    egui::SidePanel::right("control_panel")
+                        .exact_width(360.0)
+                        .resizable(false)
+                        .show(ctx, |ui| {
+                            let side_actions = render_side_panel(
+                                ui,
+                                &mut self.match_state,
+                                &self.bot_persona,
+                                &self.bot_dialogue,
+                                self.is_engine_thinking,
+                                self.config.assistance_mode,
+                                hints_rem,
+                                takebacks_rem,
+                                earned_crowns,
+                                self.config.notation_style,
+                                show_feedback,
+                            );
+
+                            if side_actions.open_bot_selector {
+                                self.active_route = ActiveRoute::PlayBots;
+                            }
+                            if side_actions.open_review {
+                                self.active_route = ActiveRoute::Review;
+                            }
+                            if side_actions.flip_board {
+                                self.config.board_flipped = !self.config.board_flipped;
+                            }
+                            if side_actions.undo_takeback {
+                                if self.takebacks_remaining().unwrap_or(99) > 0 {
+                                    self.takebacks_used = self.takebacks_used.saturating_add(1);
+                                    self.abort_engine();
+                                    self.match_state.undo_move_pair();
+                                    self.board_ui.reset();
+                                    let eval_cp = evaluate_for_white(
+                                        &self.match_state.current_pos,
+                                        &self.bot_persona.weights,
+                                    );
+                                    self.eval_bar.set_eval_cp(eval_cp);
+                                    self.last_eval_cp_white = eval_cp;
+                                }
+                            }
+                            if side_actions.request_hint {
+                                self.dispatch_hint_search();
+                            }
+                            if side_actions.resign_game {
+                                self.abort_engine();
+                                let human_color = self.match_state.human_color;
+                                self.match_state.resign(human_color);
+                                self.record_match_completion_if_needed();
+                                self.bot_dialogue = select_bot_dialogue(
+                                    self.bot_persona.id,
+                                    DialogueTrigger::GameOverWin,
+                                );
+                                self.audio.play(SoundEffect::GameOver);
+                            }
+                        });
+                }
 
                 let show_eval_bar = self.effective_show_eval_bar();
                 egui::CentralPanel::default().show(ctx, |ui| {
+                    if in_zen_match {
+                        ui.horizontal(|ui| {
+                            if ui.small_button("✕ Exit Zen Mode (Z)").clicked() {
+                                self.zen_mode = false;
+                            }
+                            if ui.small_button("⌘ Ctrl+K").clicked() {
+                                self.command_palette.toggle();
+                            }
+                        });
+                    }
                     let avail = ui.available_size();
                     let eval_w = if show_eval_bar { 28.0 + 8.0 } else { 0.0 };
                     let board_size = (avail.x - eval_w - 16.0)
@@ -1294,6 +1332,67 @@ impl eframe::App for RustyChessApp {
 
         self.show_fen_pgn_export_modal(ctx);
         self.show_settings_modal_window(ctx);
+
+        // Spotlight Command Palette (Ctrl+K) & Keyboard SAN Move Entry (Feature #10)
+        if let Some(cmd) = show_command_palette(
+            ctx,
+            &mut self.command_palette,
+            &self.match_state,
+            self.active_route == ActiveRoute::Match,
+            self.config.dark_mode,
+        ) {
+            match cmd {
+                PaletteCommand::Navigate(route) => self.active_route = route,
+                PaletteCommand::ChallengeBot(bot_id) => {
+                    self.lobby_state.selected_bot = bot_id;
+                    self.start_new_match(bot_id, Color::White, self.config.time_control);
+                }
+                PaletteCommand::SetBoardTheme(theme) => {
+                    self.config.board_theme = theme;
+                    self.profile.config = self.config.clone();
+                    self.profile.save();
+                }
+                PaletteCommand::SetPieceSet(ps) => {
+                    self.config.piece_set = ps;
+                    self.profile.config = self.config.clone();
+                    self.profile.save();
+                }
+                PaletteCommand::ToggleXRay => {
+                    self.config.show_xray_heatmap = !self.config.show_xray_heatmap;
+                }
+                PaletteCommand::ToggleZenMode => {
+                    self.zen_mode = !self.zen_mode;
+                }
+                PaletteCommand::ToggleDarkLight => {
+                    self.config.dark_mode = !self.config.dark_mode;
+                    apply_global_style_with_mode(ctx, self.config.dark_mode);
+                    self.profile.config = self.config.clone();
+                    self.profile.save();
+                }
+                PaletteCommand::FlipBoard => {
+                    self.config.board_flipped = !self.config.board_flipped;
+                }
+                PaletteCommand::OpenFenPgn => {
+                    self.custom_fen_input = format_fen(&self.match_state.displayed_position());
+                    self.fen_error_msg = None;
+                    self.show_fen_pgn_modal = true;
+                }
+                PaletteCommand::OpenSettings => {
+                    self.show_settings_modal = true;
+                }
+                PaletteCommand::OpenBlunderDeck => {
+                    self.puzzles_state.open_blunder_deck(&self.profile);
+                    self.active_route = ActiveRoute::Puzzles;
+                }
+                PaletteCommand::PlaySanMove(mv, _san) => {
+                    if self.active_route == ActiveRoute::Match && self.match_state.is_viewing_latest()
+                    {
+                        let spent = self.human_turn_started_at.elapsed().as_millis() as u64;
+                        self.execute_move_and_update(mv, None, spent, false);
+                    }
+                }
+            }
+        }
 
         // Strict Reactive Repaint Mode (NEW_DESIGN.md Section 6.4)
         let puzzle_anim_active = !self.puzzles_state.board_ui.anim_layer.is_idle()
