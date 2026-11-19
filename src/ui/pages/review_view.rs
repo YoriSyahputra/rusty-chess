@@ -9,7 +9,10 @@ use crate::{
         review::{analyze_match_review, GameReviewReport, MoveClassification},
     },
     ui::{
-        board_view::{render_board_grid, render_xray_heatmap, BoardInteractionState},
+        board_view::{
+            render_board_grid, render_move_classification_badge, render_xray_heatmap,
+            BoardInteractionState,
+        },
         theme::UiTokens,
     },
 };
@@ -644,6 +647,21 @@ pub fn render_review_page(
             );
             if config.show_xray_heatmap {
                 render_xray_heatmap(ui.painter(), b_rect, &display_pos, config.board_flipped);
+            }
+            if review_state.refutation_step.is_none() {
+                if let Some(entry) = report
+                    .entries
+                    .get(review_state.selected_ply.saturating_sub(1))
+                {
+                    render_move_classification_badge(
+                        ui.painter(),
+                        b_rect,
+                        entry.played_mv.to(),
+                        entry.classification,
+                        1.0,
+                        config.board_flipped,
+                    );
+                }
             }
         });
     });

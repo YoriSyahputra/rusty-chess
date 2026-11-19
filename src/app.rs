@@ -433,6 +433,7 @@ impl RustyChessApp {
         let human_color = self.match_state.human_color;
         let won = self.match_state.outcome.winner().map(|w| w == human_color);
         let crowns = if won == Some(true) {
+            self.board_ui.anim_layer.trigger_victory_confetti();
             self.calculate_earned_crowns_on_win()
         } else {
             0
@@ -550,6 +551,30 @@ impl RustyChessApp {
             self.match_state.outcome,
             self.config.animation_profile,
         );
+
+        // Pop-in on-board classification badge when move feedback is enabled (Feature #12)
+        if self.effective_show_move_feedback() {
+            let mover_delta_cp = match pos_before.turn() {
+                Color::White => new_eval_white - prev_eval_white,
+                Color::Black => prev_eval_white - new_eval_white,
+            };
+            let badge_cls = if mover_delta_cp <= -220 {
+                crate::engine::review::MoveClassification::Blunder
+            } else if mover_delta_cp <= -110 {
+                crate::engine::review::MoveClassification::Mistake
+            } else if mover_delta_cp <= -60 {
+                crate::engine::review::MoveClassification::Inaccuracy
+            } else if mover_delta_cp >= 180 {
+                crate::engine::review::MoveClassification::Brilliant
+            } else if mover_delta_cp >= 90 {
+                crate::engine::review::MoveClassification::Great
+            } else {
+                crate::engine::review::MoveClassification::Best
+            };
+            self.board_ui
+                .anim_layer
+                .set_move_classification_badge(mv.to(), badge_cls);
+        }
 
         self.eval_bar.set_eval_cp(new_eval_white);
         self.last_eval_cp_white = new_eval_white;
