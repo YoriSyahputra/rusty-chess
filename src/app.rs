@@ -2,7 +2,7 @@ use crate::{
     audio::{AudioEngine, SoundEffect},
     config::{
         AnimationProfile, AssistanceMode, MoveInputMethod, NotationStyle, PieceSetStyle,
-        PlayColorChoice, UserConfig,
+        PlayColorChoice, SoundTheme, UserConfig,
     },
     domain::{
         detect_opening_from_records, format_fen, AnnotationColor, ChessMatchState, Color,
@@ -810,6 +810,21 @@ impl RustyChessApp {
                     "X-Ray Square Control & Hanging Piece Heatmap (X)",
                 );
                 ui.checkbox(&mut self.config.sound_enabled, "Enable Sound Effects");
+                ui.horizontal(|ui| {
+                    ui.label("Sound Theme:");
+                    egui::ComboBox::from_id_salt("settings_sound_theme")
+                        .selected_text(self.config.sound_theme.label())
+                        .show_ui(ui, |ui| {
+                            for &st in SoundTheme::all() {
+                                ui.selectable_value(&mut self.config.sound_theme, st, st.label());
+                            }
+                        });
+                    if ui.small_button("🔊 Test").clicked() {
+                        self.audio.enabled = true;
+                        self.audio.theme = self.config.sound_theme;
+                        self.audio.play(SoundEffect::MovePiece);
+                    }
+                });
 
                 ui.add_space(8.0);
                 ui.separator();
@@ -937,6 +952,7 @@ impl RustyChessApp {
 impl eframe::App for RustyChessApp {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         self.audio.enabled = self.config.sound_enabled;
+        self.audio.theme = self.config.sound_theme;
 
         let dt = ctx.input(|i| i.unstable_dt).clamp(0.001, 0.25);
         let instant_fps = (1.0 / dt).clamp(1.0, 240.0);

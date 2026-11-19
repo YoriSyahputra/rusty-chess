@@ -2,6 +2,34 @@ use crate::domain::TimeControl;
 use crate::ui::theme::BoardTheme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum SoundTheme {
+    ClassicWood,
+    TournamentCrisp,
+    MarbleClink,
+    Retro8Bit,
+}
+
+impl SoundTheme {
+    pub fn all() -> &'static [SoundTheme] {
+        &[
+            SoundTheme::ClassicWood,
+            SoundTheme::TournamentCrisp,
+            SoundTheme::MarbleClink,
+            SoundTheme::Retro8Bit,
+        ]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            SoundTheme::ClassicWood => "Classic Wood",
+            SoundTheme::TournamentCrisp => "Tournament Crisp",
+            SoundTheme::MarbleClink => "Marble Clink",
+            SoundTheme::Retro8Bit => "8-Bit Retro",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PieceSetStyle {
     ClassicStaunton,
     ChessComNeo,
@@ -205,6 +233,7 @@ pub struct UserConfig {
     pub enable_premoves: bool,
     pub notation_style: NotationStyle,
     pub sound_enabled: bool,
+    pub sound_theme: SoundTheme,
     pub board_flipped: bool,
     pub show_coordinates: bool,
     pub show_eval_bar: bool,
@@ -227,6 +256,7 @@ impl Default for UserConfig {
             enable_premoves: true,
             notation_style: NotationStyle::Figurine,
             sound_enabled: true,
+            sound_theme: SoundTheme::ClassicWood,
             board_flipped: false,
             show_coordinates: true,
             show_eval_bar: true,

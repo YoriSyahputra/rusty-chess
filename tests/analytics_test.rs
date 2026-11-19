@@ -1,8 +1,13 @@
 use rusty_chess::{
+    audio::{synthesize_wav_bytes, SoundEffect},
+    config::SoundTheme,
     domain::{detect_opening, parse_fen, parse_san},
     engine::{coach::explain_move, review::MoveClassification},
     persistence::UserProfile,
-    ui::{board_textures::generate_procedural_board_overlay, board_view::compute_square_control_map, theme::BoardTheme},
+    ui::{
+        board_textures::generate_procedural_board_overlay, board_view::compute_square_control_map,
+        theme::BoardTheme,
+    },
 };
 use shakmaty::{Chess, Square};
 
@@ -103,5 +108,12 @@ fn test_natural_language_coach_and_procedural_board_textures() {
         let img = generate_procedural_board_overlay(theme, 64);
         assert_eq!(img.size, [64, 64]);
         assert_eq!(img.pixels.len(), 64 * 64);
+    }
+
+    for &sound_theme in SoundTheme::all() {
+        let wav = synthesize_wav_bytes(SoundEffect::Capture, sound_theme);
+        assert!(wav.len() > 100);
+        assert_eq!(&wav[0..4], b"RIFF");
+        assert_eq!(&wav[8..12], b"WAVE");
     }
 }
