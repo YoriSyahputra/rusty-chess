@@ -6,7 +6,7 @@ use crate::{
         board_view::render_board_grid,
         piece_renderer::draw_bot_avatar,
         sidebar::ActiveRoute,
-        theme::{chess_cta_button, BoardTheme, UiTokens},
+        theme::{chess_cta_button, soft_card_frame, BoardTheme, UiTokens},
     },
 };
 use egui::{Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Sense, Stroke, TextWrapMode, Ui, Vec2};
@@ -39,11 +39,7 @@ pub fn render_home_page(
                     ui.style_mut().wrap_mode = Some(TextWrapMode::Wrap);
 
                     // 1. Hero Banner & Stats Strip
-                    egui::Frame::none()
-                        .fill(tokens.bg_surface)
-                        .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
-                        .rounding(Rounding::same(12.0_f32))
-                        .inner_margin(egui::Margin::same(16.0))
+                    soft_card_frame(&tokens, egui::Margin::same(16.0))
                         .show(ui, |ui| {
                             ui.set_min_width(ui.available_width());
                             ui.label(
@@ -455,11 +451,7 @@ fn render_action_card(
     tokens: &UiTokens,
 ) -> bool {
     let mut clicked = false;
-    egui::Frame::none()
-        .fill(tokens.bg_surface)
-        .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
-        .rounding(Rounding::same(10.0_f32))
-        .inner_margin(egui::Margin::same(12.0))
+    soft_card_frame(tokens, egui::Margin::same(12.0))
         .show(ui, |ui| {
             let inner_w = ui.available_width();
             ui.set_min_width(inner_w);

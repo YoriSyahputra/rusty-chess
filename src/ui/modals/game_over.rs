@@ -3,10 +3,10 @@ use crate::{
     engine::bot::BotPersona,
     ui::{
         piece_renderer::draw_bot_avatar,
-        theme::{chess_cta_button, UiTokens},
+        theme::{chess_cta_button, tactile_surface_button, UiTokens},
     },
 };
-use egui::{Align2, Color32, Context, RichText, Rounding, Sense, Stroke, Vec2, Window};
+use egui::{Align2, Color32, Context, RichText, Sense, Vec2, Window};
 use shakmaty::Color;
 
 #[derive(Debug, Default)]
@@ -113,31 +113,31 @@ pub fn show_game_over_modal(
 
             ui.add_space(8.0);
 
-            // Secondary Row: Strictly aligned 50/50 columns matching exact CTA width
+            // Secondary Row: Strictly aligned 50/50 smooth tactile columns matching exact CTA width
             ui.columns(2, |cols| {
                 let col_w = cols[0].available_width();
-                if cols[0]
-                    .add_sized(
-                        [col_w, 36.0],
-                        egui::Button::new(RichText::new("🔄 Rematch").strong().size(13.0))
-                            .rounding(Rounding::same(8.0_f32))
-                            .stroke(Stroke::new(1.0_f32, tokens.border_subtle)),
-                    )
-                    .clicked()
+                if tactile_surface_button(
+                    &mut cols[0],
+                    Vec2::new(col_w, 36.0),
+                    "🔄 Rematch",
+                    true,
+                    &tokens,
+                )
+                .clicked()
                 {
                     actions.play_rematch = true;
                     should_close = true;
                 }
 
                 let col_w2 = cols[1].available_width();
-                if cols[1]
-                    .add_sized(
-                        [col_w2, 36.0],
-                        egui::Button::new(RichText::new("♞ New Bot").strong().size(13.0))
-                            .rounding(Rounding::same(8.0_f32))
-                            .stroke(Stroke::new(1.0_f32, tokens.border_subtle)),
-                    )
-                    .clicked()
+                if tactile_surface_button(
+                    &mut cols[1],
+                    Vec2::new(col_w2, 36.0),
+                    "♞ New Bot",
+                    true,
+                    &tokens,
+                )
+                .clicked()
                 {
                     actions.select_new_bot = true;
                     should_close = true;

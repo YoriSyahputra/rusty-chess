@@ -5,10 +5,10 @@ use crate::{
         board_view::render_board_grid,
         side_panel::render_player_strip,
         sidebar::ActiveRoute,
-        theme::{BoardTheme, UiTokens},
+        theme::{chess_cta_button, soft_card_frame, BoardTheme, UiTokens},
     },
 };
-use egui::{Color32, RichText, Rounding, Sense, Stroke, Ui, Vec2};
+use egui::{Color32, RichText, Sense, Ui, Vec2};
 
 #[derive(Debug, Default)]
 pub struct PlayHubActions {
@@ -225,13 +225,10 @@ fn render_mode_selector_card(
     tokens: &UiTokens,
 ) -> bool {
     let mut clicked = false;
-    egui::Frame::none()
-        .fill(tokens.bg_surface)
-        .stroke(Stroke::new(1.0_f32, tokens.border_subtle))
-        .rounding(Rounding::same(8.0_f32))
-        .inner_margin(egui::Margin::same(12.0))
+    soft_card_frame(tokens, egui::Margin::same(12.0))
         .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
+            let w = ui.available_width();
+            ui.set_min_width(w);
             ui.label(
                 RichText::new(title)
                     .strong()
@@ -244,20 +241,8 @@ fn render_mode_selector_card(
                     .size(11.5)
                     .color(tokens.text_secondary),
             );
-            ui.add_space(8.0);
-            if ui
-                .add_sized(
-                    [ui.available_width(), 32.0],
-                    egui::Button::new(
-                        RichText::new(btn_text)
-                            .strong()
-                            .size(13.0)
-                            .color(Color32::WHITE),
-                    )
-                    .fill(accent),
-                )
-                .clicked()
-            {
+            ui.add_space(10.0);
+            if chess_cta_button(ui, Vec2::new(w, 34.0), btn_text, accent) {
                 clicked = true;
             }
         });

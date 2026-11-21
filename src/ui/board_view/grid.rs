@@ -119,8 +119,22 @@ pub fn render_board_grid_ext(
     let sq_size = board_rect.width() / 8.0;
     let board = pos.board();
 
-    let frame_rect = board_rect.expand(4.0);
-    painter.rect_filled(frame_rect, Rounding::same(6.0_f32), palette.border_bg);
+    // Soft layered ambient drop shadow underneath the board so it floats naturally off the canvas
+    for (expand, y_off, alpha) in [(10.0_f32, 6.0_f32, 22u8), (6.5, 4.0, 38), (4.5, 2.0, 52)] {
+        painter.rect_filled(
+            board_rect.expand(expand).translate(Vec2::new(0.0, y_off)),
+            Rounding::same(10.0_f32),
+            Color32::from_rgba_unmultiplied(0, 0, 0, alpha),
+        );
+    }
+
+    let frame_rect = board_rect.expand(4.5);
+    painter.rect(
+        frame_rect,
+        Rounding::same(8.0_f32),
+        palette.border_bg,
+        Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(255, 255, 255, 22)),
+    );
 
     let king_in_check_sq = if pos.is_check() {
         board.king_of(pos.turn())

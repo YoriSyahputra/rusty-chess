@@ -37,18 +37,31 @@ pub fn render_player_strip(
         match_state.current_pos.turn() == strip_side && !match_state.outcome.is_game_over();
     let clock_str = match_state.clock.format_time(strip_side);
 
+    let turn_t = ui.ctx().animate_bool_with_time(
+        ui.make_persistent_id(if is_bot_strip {
+            "strip_turn_bot"
+        } else {
+            "strip_turn_human"
+        }),
+        is_active_turn,
+        0.18,
+    );
+
     let bg_fill = if dark_mode {
-        Color32::from_rgb(0x30, 0x2E, 0x2B)
+        Color32::from_rgb(0x2B, 0x29, 0x26)
     } else {
         Color32::from_rgb(0xFF, 0xFF, 0xFF)
     };
-    let border_color = if is_active_turn {
-        Color32::from_rgb(0x81, 0xB6, 0x4C)
-    } else if dark_mode {
-        Color32::from_rgb(0x42, 0x3F, 0x3B)
+    let idle_border = if dark_mode {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 16)
     } else {
-        Color32::from_rgb(0xD6, 0xD4, 0xCE)
+        Color32::from_rgba_unmultiplied(30, 28, 24, 22)
     };
+    let border_color = crate::ui::theme::lerp_color(
+        idle_border,
+        Color32::from_rgb(0x81, 0xB6, 0x4C),
+        turn_t,
+    );
 
     let text_primary = if dark_mode {
         Color32::from_rgb(0xF5, 0xF5, 0xF5)
@@ -59,9 +72,15 @@ pub fn render_player_strip(
     ui.allocate_ui(Vec2::new(strip_width, 44.0), |ui| {
         egui::Frame::none()
             .fill(bg_fill)
-            .stroke(Stroke::new(if is_active_turn { 1.6_f32 } else { 1.0_f32 }, border_color))
-            .rounding(Rounding::same(6.0_f32))
+            .stroke(Stroke::new(1.0_f32 + 0.6_f32 * turn_t, border_color))
+            .rounding(Rounding::same(10.0_f32))
             .inner_margin(egui::Margin::symmetric(10.0, 5.0))
+            .shadow(egui::epaint::Shadow {
+                offset: Vec2::new(0.0, 2.0),
+                blur: 8.0,
+                spread: 0.0,
+                color: Color32::from_rgba_unmultiplied(0, 0, 0, if dark_mode { 55 } else { 18 }),
+            })
             .show(ui, |ui| {
                 ui.set_width((strip_width - 22.0).max(160.0));
                 ui.set_height(32.0);
@@ -239,8 +258,8 @@ pub fn render_player_strip(
                                     Color32::from_rgb(75, 72, 68)
                                 },
                             ))
-                            .rounding(Rounding::same(5.0_f32))
-                            .inner_margin(egui::Margin::symmetric(10.0, 3.0))
+                            .rounding(Rounding::same(8.0_f32))
+                            .inner_margin(egui::Margin::symmetric(11.0, 4.0))
                             .show(ui, |ui| {
                                 ui.label(
                                     RichText::new(&clock_display)

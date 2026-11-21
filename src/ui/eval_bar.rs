@@ -71,17 +71,17 @@ impl EvalBarState {
 
         let target = self.target_ratio();
         let diff = target - self.displayed_white_ratio;
-        if diff.abs() > 0.005 {
-            self.displayed_white_ratio += diff * 0.18;
+        if diff.abs() > 0.004 {
+            self.displayed_white_ratio += diff * 0.22;
             ui.ctx().request_repaint();
         } else {
             self.displayed_white_ratio = target;
         }
 
         let painter = ui.painter_at(rect);
-        let white_fill = Color32::from_rgb(236, 238, 242);
-        let black_fill = Color32::from_rgb(38, 41, 48);
-        let rounding = Rounding::same(4.0_f32);
+        let white_fill = Color32::from_rgb(240, 240, 236);
+        let black_fill = Color32::from_rgb(44, 42, 39);
+        let rounding = Rounding::same(6.0_f32);
 
         let top_is_black = !board_flipped;
         let top_color = if top_is_black { black_fill } else { white_fill };

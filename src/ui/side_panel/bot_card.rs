@@ -26,10 +26,16 @@ pub fn render_bot_card(
     );
 
     egui::Frame::none()
-        .fill(Color32::from_rgb(0x30, 0x2E, 0x2B))
-        .stroke(Stroke::new(1.0_f32, Color32::from_rgb(0x47, 0x44, 0x3F)))
-        .rounding(Rounding::same(8.0_f32))
-        .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+        .fill(Color32::from_rgb(0x2B, 0x29, 0x26))
+        .stroke(Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(255, 255, 255, 18)))
+        .rounding(Rounding::same(12.0_f32))
+        .inner_margin(egui::Margin::symmetric(12.0, 10.0))
+        .shadow(egui::epaint::Shadow {
+            offset: Vec2::new(0.0, 3.0),
+            blur: 12.0,
+            spread: 0.0,
+            color: Color32::from_rgba_unmultiplied(0, 0, 0, 62),
+        })
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 let (avatar_rect, _) =
@@ -119,19 +125,28 @@ pub fn render_bot_card(
 
             ui.add_space(6.0);
 
-            // Speech Bubble dengan border aksen
-            egui::Frame::none()
-                .fill(Color32::from_rgb(0x26, 0x24, 0x21))
-                .stroke(Stroke::new(1.0_f32, accent.gamma_multiply(0.55)))
-                .rounding(Rounding::same(6.0_f32))
-                .inner_margin(egui::Margin::symmetric(9.0, 6.0))
+            // Modern soft speech bubble with sleek accent tint
+            let bubble_resp = egui::Frame::none()
+                .fill(Color32::from_rgb(0x21, 0x1F, 0x1C))
+                .stroke(Stroke::new(1.0_f32, accent.gamma_multiply(0.32)))
+                .rounding(Rounding::same(10.0_f32))
+                .inner_margin(egui::Margin::symmetric(12.0, 7.0))
                 .show(ui, |ui| {
                     ui.set_min_width(ui.available_width());
                     ui.label(
-                        RichText::new(format!("💬 “{dialogue_text}”"))
+                        RichText::new(format!("“{dialogue_text}”"))
                             .size(12.0)
-                            .color(Color32::from_rgb(0xF5, 0xF5, 0xF5)),
+                            .color(Color32::from_rgb(0xF0, 0xEE, 0xEA)),
                     );
                 });
+            let r = bubble_resp.response.rect;
+            ui.painter().rect_filled(
+                egui::Rect::from_min_max(
+                    egui::Pos2::new(r.min.x + 2.0, r.min.y + 5.0),
+                    egui::Pos2::new(r.min.x + 5.0, r.max.y - 5.0),
+                ),
+                Rounding::same(2.0_f32),
+                accent,
+            );
         });
 }

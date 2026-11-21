@@ -178,60 +178,56 @@ pub fn render_side_panel(
 
     ui.add_space(6.0);
 
-    // 3. Pinned Footer Top Row (32 px): History Stepper (`|<<`, `<`, `>`, `>>|`, `Flip`)
+    // 3. Pinned Footer Top Row (32 px): Smooth Tactile History Stepper (`|<<`, `<`, `>`, `>>|`, `Flip`)
     let viewed_ply = match_state.viewed_ply;
     let total_plies = match_state.history.len();
+    let footer_tokens = crate::ui::theme::UiTokens::for_mode(ui.visuals().dark_mode);
 
     ui.horizontal(|ui| {
         let btn_w = (ui.available_width() - 32.0) / 5.0;
-        let btn_size = [btn_w.max(38.0), 28.0];
+        let btn_size = Vec2::new(btn_w.max(38.0), 30.0);
 
-        if ui
-            .add_enabled(
-                viewed_ply > 0,
-                egui::Button::new(RichText::new("|<<").monospace().strong()).min_size(btn_size.into()),
-            )
+        if crate::ui::theme::tactile_surface_button(ui, btn_size, "|<<", viewed_ply > 0, &footer_tokens)
             .on_hover_text("First Move (Home)")
             .clicked()
         {
             match_state.step_history_first();
         }
 
-        if ui
-            .add_enabled(
-                viewed_ply > 0,
-                egui::Button::new(RichText::new("<").monospace().strong()).min_size(btn_size.into()),
-            )
+        if crate::ui::theme::tactile_surface_button(ui, btn_size, "<", viewed_ply > 0, &footer_tokens)
             .on_hover_text("Previous Move (Left Arrow)")
             .clicked()
         {
             match_state.step_history_prev();
         }
 
-        if ui
-            .add_enabled(
-                viewed_ply < total_plies,
-                egui::Button::new(RichText::new(">").monospace().strong()).min_size(btn_size.into()),
-            )
-            .on_hover_text("Next Move (Right Arrow)")
-            .clicked()
+        if crate::ui::theme::tactile_surface_button(
+            ui,
+            btn_size,
+            ">",
+            viewed_ply < total_plies,
+            &footer_tokens,
+        )
+        .on_hover_text("Next Move (Right Arrow)")
+        .clicked()
         {
             match_state.step_history_next();
         }
 
-        if ui
-            .add_enabled(
-                viewed_ply < total_plies,
-                egui::Button::new(RichText::new(">>|").monospace().strong()).min_size(btn_size.into()),
-            )
-            .on_hover_text("Latest Position (End)")
-            .clicked()
+        if crate::ui::theme::tactile_surface_button(
+            ui,
+            btn_size,
+            ">>|",
+            viewed_ply < total_plies,
+            &footer_tokens,
+        )
+        .on_hover_text("Latest Position (End)")
+        .clicked()
         {
             match_state.step_history_last();
         }
 
-        if ui
-            .add_sized(btn_size, egui::Button::new(RichText::new("⇄ Flip").size(12.0)))
+        if crate::ui::theme::tactile_surface_button(ui, btn_size, "⇄ Flip", true, &footer_tokens)
             .on_hover_text("Flip Board Orientation (F)")
             .clicked()
         {
@@ -239,9 +235,9 @@ pub fn render_side_panel(
         }
     });
 
-    ui.add_space(4.0);
+    ui.add_space(5.0);
 
-    // 4. Pinned Footer Bottom Row (40 px): Action Buttons (`Hint`, `Takeback`, `Resign`, `New Match`)
+    // 4. Pinned Footer Bottom Row (38 px): Smooth Tactile Action Buttons (`Hint`, `Undo`, `Resign`, `New`)
     let can_use_hint = !match_state.outcome.is_game_over()
         && match_state.is_viewing_latest()
         && !is_thinking
@@ -256,35 +252,29 @@ pub fn render_side_panel(
 
     ui.horizontal(|ui| {
         let btn_w = (ui.available_width() - 24.0) / 4.0;
-        let btn_size = [btn_w.max(54.0), 34.0];
+        let btn_size = Vec2::new(btn_w.max(54.0), 34.0);
 
-        if ui
-            .add_enabled(
-                can_use_hint,
-                egui::Button::new(RichText::new("★ Hint").size(12.0)).min_size(btn_size.into()),
-            )
+        if crate::ui::theme::tactile_surface_button(ui, btn_size, "★ Hint", can_use_hint, &footer_tokens)
             .on_hover_text("Show recommended best move arrow")
             .clicked()
         {
             actions.request_hint = true;
         }
 
-        if ui
-            .add_enabled(
-                can_use_takeback,
-                egui::Button::new(RichText::new("↩ Undo").size(12.0)).min_size(btn_size.into()),
-            )
-            .on_hover_text("Take back last move pair")
-            .clicked()
+        if crate::ui::theme::tactile_surface_button(
+            ui,
+            btn_size,
+            "↩ Undo",
+            can_use_takeback,
+            &footer_tokens,
+        )
+        .on_hover_text("Take back last move pair")
+        .clicked()
         {
             actions.undo_takeback = true;
         }
 
-        if ui
-            .add_enabled(
-                can_resign,
-                egui::Button::new(RichText::new("✕ Resign").size(12.0)).min_size(btn_size.into()),
-            )
+        if crate::ui::theme::tactile_surface_button(ui, btn_size, "✕ Resign", can_resign, &footer_tokens)
             .on_hover_text("Resign current match")
             .clicked()
         {
@@ -293,7 +283,7 @@ pub fn render_side_panel(
 
         if crate::ui::theme::chess_cta_button(
             ui,
-            egui::Vec2::new(btn_size[0], btn_size[1]),
+            btn_size,
             "⚔ New",
             Color32::from_rgb(0x81, 0xB6, 0x4C),
         ) {

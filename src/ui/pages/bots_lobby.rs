@@ -7,7 +7,7 @@ use crate::{
         board_view::render_board_grid,
         piece_renderer::draw_bot_avatar,
         side_panel::render_player_strip,
-        theme::UiTokens,
+        theme::{chess_cta_button, lerp_color, soft_card_frame, UiTokens},
     },
 };
 use egui::{Color32, RichText, Rounding, ScrollArea, Sense, Stroke, Ui, Vec2};
@@ -371,22 +371,14 @@ pub fn render_bots_lobby(
 
                     ui.add_space(6.0);
 
-                    // Primary CTA: Full-width #81B64C button with label "Play" (44 px height)
+                    // Primary CTA: Full-width tactile 3D Chess.com green "Play" button
                     let full_w = ui.available_width();
-                    if ui
-                        .add_sized(
-                            [full_w, 44.0],
-                            egui::Button::new(
-                                RichText::new("▶  Play")
-                                    .strong()
-                                    .size(17.0)
-                                    .color(Color32::WHITE),
-                            )
-                            .fill(tokens.accent_primary)
-                            .rounding(Rounding::same(8.0_f32)),
-                        )
-                        .clicked()
-                    {
+                    if chess_cta_button(
+                        ui,
+                        Vec2::new(full_w, 44.0),
+                        "▶  Play",
+                        tokens.accent_primary,
+                    ) {
                         actions.start_match_requested = true;
                     }
                 });
@@ -459,62 +451,88 @@ fn render_bot_roster_tile(
     is_selected: bool,
     tokens: &UiTokens,
 ) -> bool {
+    let tile_id = ui.make_persistent_id(format!("bot_tile_{}", persona.code));
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(78.0, 74.0), Sense::click());
+    let hovered = resp.hovered();
+
+    let hover_t = ui
+        .ctx()
+        .animate_bool_with_time(tile_id.with("h"), hovered, 0.12);
+    let sel_t = ui
+        .ctx()
+        .animate_bool_with_time(tile_id.with("s"), is_selected, 0.16);
+
+    let y_lift = -1.8 * hover_t;
+    let draw_rect = rect.translate(Vec2::new(0.0, y_lift));
+
     let accent = Color32::from_rgb(
         persona.accent_rgb[0],
         persona.accent_rgb[1],
         persona.accent_rgb[2],
     );
-    let bg = if is_selected {
-        tokens.bg_surface_elevated
-    } else {
-        Color32::TRANSPARENT
-    };
-    let border = if is_selected {
-        Stroke::new(2.0_f32, tokens.accent_primary)
-    } else {
-        Stroke::new(1.0_f32, tokens.border_subtle)
-    };
+    let idle_bg = Color32::from_rgba_unmultiplied(
+        tokens.bg_surface_elevated.r(),
+        tokens.bg_surface_elevated.g(),
+        tokens.bg_surface_elevated.b(),
+        (75.0 + hover_t * 140.0) as u8,
+    );
+    let sel_bg = Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 36);
+    let fill = lerp_color(idle_bg, sel_bg, sel_t);
 
-    let resp = egui::Frame::none()
-        .fill(bg)
-        .stroke(border)
-        .rounding(Rounding::same(6.0_f32))
-        .inner_margin(egui::Margin::symmetric(6.0, 4.0))
-        .show(ui, |ui| {
-            ui.set_width(72.0);
-            ui.vertical_centered(|ui| {
-                let (av_rect, _) = ui.allocate_exact_size(Vec2::splat(34.0), Sense::hover());
-                draw_bot_avatar(
-                    ui.painter(),
-                    av_rect,
-                    persona.id,
-                    persona.accent_rgb,
-                    is_selected,
-                );
-                ui.label(
-                    RichText::new(persona.name)
-                        .strong()
-                        .size(11.0)
-                        .color(tokens.text_primary),
-                );
-                let elo_txt = if persona.code == "mittens" {
-                    "1".to_string()
-                } else {
-                    format!("{}", persona.elo)
-                };
-                ui.label(RichText::new(elo_txt).size(10.0).color(accent));
-                let crown_str: String = (0..3)
-                    .map(|i| if i < crowns { '👑' } else { '☆' })
-                    .collect();
-                ui.label(
-                    RichText::new(crown_str)
-                        .size(9.5)
-                        .color(tokens.accent_gold),
-                );
-            });
-        })
-        .response
-        .interact(Sense::click());
+    let border_col = lerp_color(
+        lerp_color(tokens.border_subtle, accent.gamma_multiply(0.7), hover_t),
+        tokens.accent_primary,
+        sel_t,
+    );
+
+    let painter = ui.painter();
+    painter.rect(
+        draw_rect,
+        Rounding::same(10.0_f32),
+        fill,
+        Stroke::new(1.0_f32 + sel_t * 1.0_f32, border_col),
+    );
+
+    let av_rect = egui::Rect::from_center_size(
+        egui::Pos2::new(draw_rect.center().x, draw_rect.min.y + 22.0),
+        Vec2::splat(34.0),
+    );
+    draw_bot_avatar(
+        painter,
+        av_rect,
+        persona.id,
+        persona.accent_rgb,
+        is_selected || hovered,
+    );
+
+    painter.text(
+        egui::Pos2::new(draw_rect.center().x, draw_rect.min.y + 47.0),
+        egui::Align2::CENTER_CENTER,
+        persona.name,
+        egui::FontId::proportional(11.0),
+        tokens.text_primary,
+    );
+
+    let elo_txt = if persona.code == "mittens" {
+        "1".to_string()
+    } else {
+        format!("{}", persona.elo)
+    };
+    let crown_txt: String = (0..3)
+        .map(|i| if i < crowns { '👑' } else { '☆' })
+        .collect();
+    painter.text(
+        egui::Pos2::new(draw_rect.center().x, draw_rect.min.y + 62.0),
+        egui::Align2::CENTER_CENTER,
+        format!("{elo_txt} {crown_txt}"),
+        egui::FontId::proportional(9.5),
+        accent,
+    );
+
+    let _ = soft_card_frame;
+    if hovered {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
 
     resp.clicked()
 }
